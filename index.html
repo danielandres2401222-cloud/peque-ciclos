@@ -34,9 +34,9 @@ header.top.conlogo #hlogo{display:block;margin:2px auto 0;width:min(52vw,220px);
 header.top.conlogo h1{display:none}
 header.top.conlogo .sub{display:none}
 header.top.conlogo{position:relative}
-html[data-fx]:not([data-fx=none]) header.top::before{opacity:0;transition:opacity .25s ease}
-html.scrolled[data-fx]:not([data-fx=none]) header.top::before{opacity:1}
-header.top.conlogo::before{display:none!important}
+html[data-fx]:not([data-fx=none]) header.top::before{display:none!important}
+#topblur{display:none;position:fixed;left:0;right:0;top:-320px;height:calc(346px + var(--blurH,90px));z-index:4;pointer-events:none;-webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 44px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 44px),transparent);transition:height .25s ease}
+html[data-fx]:not([data-fx=none]) #topblur{display:block}
 header.top .sub{font-size:13px;color:var(--muted);font-weight:500;letter-spacing:.02em}
 header.top h1{margin:0;color:var(--rosa-ink);font-size:28px;letter-spacing:-.02em;font-weight:750}
 main{padding:6px 16px 24px;max-width:640px;margin:0 auto}
@@ -221,7 +221,7 @@ html[data-fx]:not([data-fx=none]) .kpi.big{box-shadow:0 10px 30px rgba(143,106,6
 </style>
 </head>
 <body>
-<header class="top"><img id="hlogo" src="logo.png" alt="Pequeciclos"><div class="sub" id="hsub"></div><h1 id="htitle">Inicio</h1><button class="thb" id="thBtn" aria-label="Claro / Nocturno"></button></header>
+<div id="topblur" aria-hidden="true"></div><header class="top"><img id="hlogo" src="logo.png" alt="Pequeciclos"><div class="sub" id="hsub"></div><h1 id="htitle">Inicio</h1><button class="thb" id="thBtn" aria-label="Claro / Nocturno"></button></header>
 <div id="bgfx" aria-hidden="true"></div>
 <div id="bgimg" aria-hidden="true"></div>
 <canvas id="bgpart" aria-hidden="true"></canvas>
@@ -835,8 +835,7 @@ function rangoMes(off=0){const d=new Date();const a=new Date(d.getFullYear(),d.g
 let vista='inicio'; const ui={ropaTab:'stock',ramosTab:'stock',q:'',inf:{per:'mes',sec:'todo',desde:'',hasta:''}};
 const TABS=['inicio','ropa','ramos','pedidos','catalogo','informes','ajustes'];
 document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{const d=TABS.indexOf(b.dataset.v)-TABS.indexOf(vista);if(!d)return;$('#view').style.setProperty('--dx',(d>0?18:-18)+'px');vista=b.dataset.v;render();window.scrollTo(0,0)});
-addEventListener('scroll',()=>document.documentElement.classList.toggle('scrolled',scrollY>4),{passive:true});
-function setHead(t,s){$('#htitle').textContent=t;$('#hsub').textContent=s||'';document.querySelector('header.top').classList.toggle('conlogo',vista==='inicio')}
+function setHead(t,s){$('#htitle').textContent=t;$('#hsub').textContent=s||'';document.querySelector('header.top').classList.toggle('conlogo',vista==='inicio');requestAnimationFrame(()=>{const h=document.querySelector('header.top');const fijo=getComputedStyle(h).position==='sticky';document.documentElement.style.setProperty('--blurH',(fijo?h.offsetHeight:Math.round(parseFloat(getComputedStyle(h).paddingTop)||0)+34)+'px')})}
 function render(anim){
   syncTema();
   document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===vista));
