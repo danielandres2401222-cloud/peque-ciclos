@@ -1384,7 +1384,8 @@ async function formComprobante(p,aviso){
   <div class="f2"><div class="f"><label>Envío por</label><input id="cAg" list="eAgL2" value="${esc(ev.agencia||(e.agencia||'').replace(/ · .*/,''))}" placeholder="Starken…"><datalist id="eAgL2"><option>Starken</option><option>Chilexpress</option><option>Blue Express</option><option>Correos de Chile</option><option>Retiro en persona</option></datalist></div>
     <div class="f"><label>N° de seguimiento</label><input id="cSeg" value="${esc(ev.seguimiento||'')}" placeholder="Opcional"></div></div>
   <div class="f"><label>Mensaje</label><textarea id="cMsg" rows="9"></textarea></div>
-  <button class="btn wa" id="cWa" style="margin-bottom:10px">Enviar por WhatsApp</button>
+  <button class="btn wa" id="cWa" style="margin-bottom:6px">Enviar por WhatsApp</button>
+  <div class="hint" id="cHow" style="margin:0 0 10px"></div>
   <div id="cAlt"></div>
   <button class="btn sec" id="cOk">Listo</button>`,()=>{
     const img=$('#cImg');if(foto){img.src=URL.createObjectURL(foto)}
@@ -1392,17 +1393,28 @@ async function formComprobante(p,aviso){
       if(/retiro/i.test(ag))return`¡Hola${nom?' '+nom:''}! 🧸\nMuchas gracias por retirar tu pedido de *${p.detalle}*.\nEspero que lo disfruten mucho 💛\n\n— ${S.config.negocio}`;
       return`¡Hola${nom?' '+nom:''}! 🧸\nTu pedido de *${p.detalle}* ya fue enviado${ag?` por *${ag}*`:''} 📦\n${seg?`N° de seguimiento: *${seg}*\n`:''}${e.direccion?`Destino: ${e.direccion}${e.comuna?', '+e.comuna:''}\n`:''}${foto?'Te adjunto el comprobante de envío.\n':''}\nCualquier duda me escribes. ¡Gracias por tu compra! 💛\n\n— ${S.config.negocio}`};
     const pinta=()=>{if(!editado)$('#cMsg').value=armar();
-      const n=waNum(p);$('#cAlt').innerHTML=foto&&n?`<a class="btn sec" id="cChat" style="margin-bottom:10px;text-decoration:none" href="https://wa.me/${n}?text=${encodeURIComponent($('#cMsg').value)}" target="_blank" rel="noopener">Abrir su chat (adjuntas la foto tú)</a>`:(!n?'<div class="hint" style="margin:-4px 0 10px">No hay teléfono en el pedido: al enviar eliges el chat en WhatsApp.</div>':'')};
+      const n=waNum(p);
+      $('#cWa').textContent=foto&&n?`Abrir chat de ${nom||'la clienta'} con la foto`:n?`Enviar a ${nom||'la clienta'} por WhatsApp`:'Enviar por WhatsApp';
+      $('#cHow').innerHTML=foto&&n?'Se abre su chat con el mensaje escrito y la foto queda copiada: <b>mantén apretado el cuadro de texto y toca Pegar</b> para adjuntarla.':(!n?'No hay teléfono en el pedido: al enviar eliges el chat en WhatsApp.':'');
+      $('#cAlt').innerHTML=foto?'<button class="btn sec" id="cShare" style="margin-bottom:10px">Compartir foto + mensaje (elegir chat)</button>':'';
+      const sh=$('#cShare');if(sh)sh.onclick=compartir};
     $('#cMsg').oninput=()=>{editado=true;pinta()};$('#cAg').oninput=pinta;$('#cSeg').oninput=pinta;pinta();
     $('#cFoto').onclick=()=>$('#cFile').click();
     $('#cFile').onchange=async ev2=>{const f=ev2.target.files[0];if(!f)return;try{foto=await achicar(f)}catch(_){foto=f}img.src=URL.createObjectURL(foto);img.hidden=false;$('#cFoto').innerHTML='📷 Cambiar foto';pinta()};
     const guardarEnvio=async()=>{p.enviado={agencia:$('#cAg').value.trim(),seguimiento:$('#cSeg').value.trim(),fecha:hoy(),foto:!!foto};if(foto)await idbSet(fotoK,foto).catch(()=>{});await guardar()};
-    $('#cWa').onclick=async()=>{const msg=$('#cMsg').value;await guardarEnvio();
-      try{await navigator.clipboard.writeText(msg)}catch(_){}
-      if(foto){const file=new File([foto],'comprobante-envio.jpg',{type:foto.type||'image/jpeg'});
-        if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],text:msg});toast('Elige WhatsApp y el chat de la clienta');return}catch(err){if(err&&err.name==='AbortError')return}}}
-      const n=waNum(p);window.open(n?`https://wa.me/${n}?text=${encodeURIComponent(msg)}`:`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
-      if(foto)toast('Mensaje copiado. Adjunta la foto en el chat')};
+    const aPng=b=>new Promise(res=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=im.naturalWidth;c.height=im.naturalHeight;c.getContext('2d').drawImage(im,0,0);c.toBlob(res,'image/png')};im.src=URL.createObjectURL(b)});
+    async function compartir(){const msg=$('#cMsg').value;guardarEnvio();
+      const file=new File([foto],'comprobante-envio.jpg',{type:foto.type||'image/jpeg'});
+      if(navigator.canShare&&navigator.canShare({files:[file],text:msg})){try{await navigator.share({files:[file],text:msg});return}catch(err){if(err&&err.name==='AbortError')return}}
+      toast('Este celular no deja compartir fotos desde aquí')}
+    $('#cWa').onclick=async()=>{const msg=$('#cMsg').value;const n=waNum(p);
+      if(foto&&n){let w=null;
+        try{if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write)w=navigator.clipboard.write([new ClipboardItem({'image/png':aPng(foto)})])}catch(_){w=null}
+        if(!w)return compartir();
+        window.open(`https://wa.me/${n}?text=${encodeURIComponent(msg)}`,'_blank');guardarEnvio();
+        w.then(()=>toast('Foto copiada: en el chat mantén apretado y toca Pegar')).catch(()=>toast('No pude copiar la foto: usa "Compartir foto + mensaje"'));return}
+      guardarEnvio();if(foto&&!n)return compartir();
+      window.open(n?`https://wa.me/${n}?text=${encodeURIComponent(msg)}`:`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank')};
     $('#cOk').onclick=async()=>{await guardarEnvio();cerrar();render(false)};
   });
 }
@@ -1443,67 +1455,114 @@ async function ventaDePedido(p){
   if(!m)return false;S.movs.push(m);p.movId=m.id;await guardar();return true;
 }
 
-/* ===== Datos de envío: pegar el mensaje de la clienta y rellenar solo ===== */
+/* ===== Datos de envío: entiende el mensaje de la clienta y reparte cada dato donde corresponde ===== */
 const ENVIO=(()=>{
   const sa=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
   const COMUNAS='Arica,Camarones,Putre,General Lagos,Iquique,Alto Hospicio,Pozo Almonte,Camiña,Colchane,Huara,Pica,Antofagasta,Mejillones,Sierra Gorda,Taltal,Calama,Ollagüe,San Pedro de Atacama,Tocopilla,María Elena,Copiapó,Caldera,Tierra Amarilla,Chañaral,Diego de Almagro,Vallenar,Alto del Carmen,Freirina,Huasco,La Serena,Coquimbo,Andacollo,La Higuera,Paiguano,Vicuña,Illapel,Canela,Los Vilos,Salamanca,Ovalle,Combarbalá,Monte Patria,Punitaqui,Río Hurtado,Valparaíso,Casablanca,Concón,Juan Fernández,Puchuncaví,Quintero,Viña del Mar,Isla de Pascua,Los Andes,Calle Larga,Rinconada,San Esteban,La Ligua,Cabildo,Papudo,Petorca,Zapallar,Quillota,La Calera,Hijuelas,La Cruz,Nogales,San Antonio,Algarrobo,Cartagena,El Quisco,El Tabo,Santo Domingo,San Felipe,Catemu,Llaillay,Panquehue,Putaendo,Santa María,Quilpué,Limache,Olmué,Villa Alemana,Rancagua,Codegua,Coinco,Coltauco,Doñihue,Graneros,Las Cabras,Machalí,Malloa,Mostazal,Olivar,Peumo,Pichidegua,Quinta de Tilcoco,Rengo,Requínoa,San Vicente,Pichilemu,La Estrella,Litueche,Marchigüe,Navidad,Paredones,San Fernando,Chépica,Chimbarongo,Lolol,Nancagua,Palmilla,Peralillo,Placilla,Pumanque,Santa Cruz,Talca,Constitución,Curepto,Empedrado,Maule,Pelarco,Pencahue,Río Claro,San Clemente,San Rafael,Cauquenes,Chanco,Pelluhue,Curicó,Hualañé,Licantén,Molina,Rauco,Romeral,Sagrada Familia,Teno,Vichuquén,Linares,Colbún,Longaví,Parral,Retiro,San Javier,Villa Alegre,Yerbas Buenas,Chillán,Bulnes,Chillán Viejo,El Carmen,Pemuco,Pinto,Quillón,San Ignacio,Yungay,Quirihue,Cobquecura,Coelemu,Ninhue,Portezuelo,Ránquil,Treguaco,San Carlos,Coihueco,Ñiquén,San Fabián,San Nicolás,Concepción,Coronel,Chiguayante,Florida,Hualqui,Lota,Penco,San Pedro de la Paz,Santa Juana,Talcahuano,Tomé,Hualpén,Lebu,Arauco,Cañete,Contulmo,Curanilahue,Los Álamos,Tirúa,Los Ángeles,Antuco,Cabrero,Laja,Mulchén,Nacimiento,Negrete,Quilaco,Quilleco,San Rosendo,Santa Bárbara,Tucapel,Yumbel,Alto Biobío,Temuco,Carahue,Cunco,Curarrehue,Freire,Galvarino,Gorbea,Lautaro,Loncoche,Melipeuco,Nueva Imperial,Padre Las Casas,Perquenco,Pitrufquén,Pucón,Saavedra,Teodoro Schmidt,Toltén,Vilcún,Villarrica,Cholchol,Angol,Collipulli,Curacautín,Ercilla,Lonquimay,Los Sauces,Lumaco,Purén,Renaico,Traiguén,Victoria,Valdivia,Corral,Lanco,Los Lagos,Máfil,Mariquina,Paillaco,Panguipulli,La Unión,Futrono,Lago Ranco,Río Bueno,Puerto Montt,Calbuco,Cochamó,Fresia,Frutillar,Los Muermos,Llanquihue,Maullín,Puerto Varas,Castro,Ancud,Chonchi,Curaco de Vélez,Dalcahue,Puqueldón,Queilén,Quellón,Quemchi,Quinchao,Osorno,Puerto Octay,Purranque,Puyehue,Río Negro,San Juan de la Costa,San Pablo,Chaitén,Futaleufú,Hualaihué,Palena,Coyhaique,Lago Verde,Aysén,Cisnes,Guaitecas,Cochrane,O\'Higgins,Tortel,Chile Chico,Río Ibáñez,Punta Arenas,Laguna Blanca,Río Verde,San Gregorio,Cabo de Hornos,Antártica,Porvenir,Primavera,Timaukel,Natales,Torres del Paine,Santiago,Cerrillos,Cerro Navia,Conchalí,El Bosque,Estación Central,Huechuraba,Independencia,La Cisterna,La Florida,La Granja,La Pintana,La Reina,Las Condes,Lo Barnechea,Lo Espejo,Lo Prado,Macul,Maipú,Ñuñoa,Pedro Aguirre Cerda,Peñalolén,Providencia,Pudahuel,Quilicura,Quinta Normal,Recoleta,Renca,San Joaquín,San Miguel,San Ramón,Vitacura,Puente Alto,Pirque,San José de Maipo,Colina,Lampa,Tiltil,San Bernardo,Buin,Calera de Tango,Paine,Melipilla,Alhué,Curacaví,María Pinto,San Pedro,Talagante,El Monte,Isla de Maipo,Padre Hurtado,Peñaflor'.split(',');
   const INI=[['Arica','Arica y Parinacota'],['Iquique','Tarapacá'],['Antofagasta','Antofagasta'],['Copiapó','Atacama'],['La Serena','Coquimbo'],['Valparaíso','Valparaíso'],['Rancagua',"O'Higgins"],['Talca','Maule'],['Chillán','Ñuble'],['Concepción','Biobío'],['Temuco','La Araucanía'],['Valdivia','Los Ríos'],['Puerto Montt','Los Lagos'],['Coyhaique','Aysén'],['Punta Arenas','Magallanes'],['Santiago','Metropolitana']];
   const REGDE={};{let r='';COMUNAS.forEach(c=>{const h=INI.find(([k])=>k===c);if(h)r=h[1];REGDE[c]=r})}
-  const CK=COMUNAS.map(c=>[sa(c),c]).sort((a,b)=>b[0].length-a[0].length);
-  const REG=[['arica','Arica y Parinacota'],['tarapaca','Tarapacá'],['antofagasta','Antofagasta'],['atacama','Atacama'],['coquimbo','Coquimbo'],['valparaiso','Valparaíso'],['metropolitana','Metropolitana'],['rm','Metropolitana'],['santiago','Metropolitana'],["o'higgins","O'Higgins"],['ohiggins',"O'Higgins"],['libertador','O\'Higgins'],['maule','Maule'],['nuble','Ñuble'],['biobio','Biobío'],['bio bio','Biobío'],['araucania','La Araucanía'],['los rios','Los Ríos'],['los lagos','Los Lagos'],['aysen','Aysén'],['aisen','Aysén'],['magallanes','Magallanes']];
-  const AG=[['starken','Starken'],['chilexpress','Chilexpress'],['chile express','Chilexpress'],['blue express','Blue Express'],['bluexpress','Blue Express'],['correos de chile','Correos de Chile'],['correos','Correos de Chile'],['correo de chile','Correos de Chile'],['turbus','Turbus Cargo'],['tur bus','Turbus Cargo'],['pullman','Pullman Cargo'],['varmontt','Varmontt'],['shipit','Shipit'],['uber','Uber/Didi'],['didi','Uber/Didi'],['retiro','Retiro en persona'],['retira','Retiro en persona']];
-  const KEYS=[['nombre',/^(nombre(s)?( completo)?|destinatari[oa]|recibe|quien recibe|cliente|a nombre de)$/],['rut',/^(rut|run|rut destinatario)$/],['tel',/^(tel(efono)?|fono|cel(ular)?|numero( de (telefono|contacto|celular))?|whatsapp|wsp|contacto|movil)$/],['correo',/^(correo( electronico)?|e-?mail|mail)$/],['direccion',/^(direccion|domicilio|calle|direccion de (envio|entrega|despacho)|dir)$/],['depto',/^(depto|dpto|departamento|casa|block|torre|villa|poblacion|condominio|n(°|º|ro|umero)? (de )?(casa|depto))$/],['comuna',/^(comuna)$/],['ciudad',/^(ciudad|localidad)$/],['region',/^(region)$/],['agencia',/^(agencia|sucursal|courier|empresa( de envio)?|envio( por)?|enviar por|despacho( por)?|transporte)$/],['nota',/^(referencia(s)?|indicacion(es)?|obs(ervacion(es)?)?|nota|comentario(s)?)$/]];
-  const rutOk=r=>{const m=r.replace(/[.\s]/g,'').toUpperCase().match(/^(\d{7,8})-?([\dK])$/);if(!m)return null;let s=0,f=2;for(let i=m[1].length-1;i>=0;i--){s+=+m[1][i]*f;f=f===7?2:f+1}const dv=11-s%11,d=dv===11?'0':dv===10?'K':String(dv);return{fmt:m[1].replace(/\B(?=(\d{3})+(?!\d))/g,'.')+'-'+m[2],valido:d===m[2]}};
-  const telFmt=t=>{const d=t.replace(/\D/g,'').replace(/^56/,'');if(d.length===9&&d[0]==='9')return'+56 9 '+d.slice(1,5)+' '+d.slice(5);if(d.length===8)return'+56 9 '+d.slice(0,4)+' '+d.slice(4);if(d.length===9)return'+56 '+d;return t.trim()};
-  const capi=s=>s.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu,(m,a,b)=>a+b.toUpperCase()).replace(/\b(De|Del|La|Las|Los|Y)\b/g,w=>w.toLowerCase()).replace(/^(\p{L})/u,c=>c.toUpperCase());
-  function buscarComuna(t){const s=' '+sa(t).replace(/[^a-zñ' ]/g,' ').replace(/\s+/g,' ')+' ';for(const[k,c]of CK)if(s.includes(' '+k+' '))return c;return''}
+  const norm=s=>sa(s).replace(/[^a-z0-9ñ' ]/g,' ').replace(/\s+/g,' ').trim();
+  const CK=COMUNAS.map(c=>[norm(c),c]).sort((a,b)=>b[0].length-a[0].length);
+  const ABREV={'stgo':'Santiago','stgo centro':'Santiago','santiago centro':'Santiago','pte alto':'Puente Alto','p alto':'Puente Alto','vina':'Viña del Mar','conce':'Concepción','san bdo':'San Bernardo','est central':'Estación Central','pac':'Pedro Aguirre Cerda','lo barnechea':'Lo Barnechea','pta arenas':'Punta Arenas','pto montt':'Puerto Montt','pto varas':'Puerto Varas','los angeles':'Los Ángeles','qta normal':'Quinta Normal','nunoa':'Ñuñoa','penalolen':'Peñalolén','san pedro de la paz':'San Pedro de la Paz','spp':'San Pedro de la Paz','alto hospicio':'Alto Hospicio'};
+  const REGN=[[/\b(metropolitana|rm|r\.?m\.?|region de santiago|xiii)\b/,'Metropolitana'],[/\b(arica|parinacota|xv)\b/,'Arica y Parinacota'],[/\b(tarapaca|i)\b/,'Tarapacá'],[/\b(antofagasta|ii)\b/,'Antofagasta'],[/\b(atacama|iii)\b/,'Atacama'],[/\b(coquimbo|iv)\b/,'Coquimbo'],[/\b(valparaiso|v|quinta)\b/,'Valparaíso'],[/\b(o ?'?higgins|libertador|vi|sexta)\b/,"O'Higgins"],[/\b(maule|vii|septima)\b/,'Maule'],[/\b(nuble|xvi)\b/,'Ñuble'],[/\b(bio ?bio|viii|octava)\b/,'Biobío'],[/\b(araucania|ix|novena)\b/,'La Araucanía'],[/\b(los rios|xiv)\b/,'Los Ríos'],[/\b(los lagos|x|decima)\b/,'Los Lagos'],[/\b(aysen|aisen|xi)\b/,'Aysén'],[/\b(magallanes|xii)\b/,'Magallanes']];
+  const AG=[['starken','Starken'],['chilexpress','Chilexpress'],['chile express','Chilexpress'],['blue express','Blue Express'],['bluexpress','Blue Express'],['blue','Blue Express'],['correos de chile','Correos de Chile'],['correos','Correos de Chile'],['correo de chile','Correos de Chile'],['turbus','Turbus Cargo'],['tur bus','Turbus Cargo'],['pullman','Pullman Cargo'],['varmontt','Varmontt'],['shipit','Shipit'],['uber','Uber/Didi'],['didi','Uber/Didi'],['cabify','Uber/Didi'],['retiro en','Retiro en persona'],['retirar','Retiro en persona'],['retiro','Retiro en persona'],['paso a buscar','Retiro en persona'],['lo busco','Retiro en persona']];
+  // etiquetas: [campo, palabras]  (se buscan en cualquier parte del texto, seguidas de ":" o similar)
+  const LAB=[['nombre','nombre completo|nombre y apellido|nombre|destinatario|destinataria|recibe|quien recibe|a nombre de|cliente|clienta'],['rut','rut del destinatario|rut|run|r\\.u\\.t\\.?'],['tel','numero de telefono|numero de contacto|numero de celular|telefono de contacto|telefono|celular|fono|cel|whatsapp|wsp|movil|contacto|numero|n de contacto'],['correo','correo electronico|correo|e-mail|email|mail'],['direccion','direccion de envio|direccion de entrega|direccion de despacho|direccion|domicilio|calle|dir'],['depto','departamento|depto|dpto|block|torre|casa n|casa'],['comuna','comuna'],['ciudad','ciudad|localidad'],['region','region'],['agencia','agencia|empresa de envio|empresa|courier|envio por|enviar por|despacho por|tipo de envio|envio|sucursal'],['nota','referencias|referencia|indicaciones|observaciones|observacion|obs|nota|comentario']];
+  const LABRE=new RegExp('(^|[\\s,;.(\\-•*·|/])('+LAB.map(l=>l[1]).join('|')+')\\s*(?:[:=]|\\s-\\s|:-)\\s*','gi');
+  const quien=w=>{w=sa(w).replace(/\s+/g,' ').trim();for(const[k,re]of LAB)if(new RegExp('^(?:'+re+')$').test(w))return k;return null};
+  const RUTRE=/\b(\d{1,2}(?:\.\d{3}){2}|\d{7,8})\s*-\s*([\dkK])\b/;
+  const rutOk=r=>{const m=String(r).replace(/[.\s]/g,'').toUpperCase().match(/^(\d{7,8})-?([\dK])$/);if(!m)return null;let s=0,f=2;for(let i=m[1].length-1;i>=0;i--){s+=+m[1][i]*f;f=f===7?2:f+1}const dv=11-s%11,d=dv===11?'0':dv===10?'K':String(dv);return{fmt:m[1].replace(/\B(?=(\d{3})+(?!\d))/g,'.')+'-'+m[2],valido:d===m[2]}};
+  const TELRE=/(?:\+?\s*56[\s.-]*)?(?:\(?0?9\)?[\s.-]*)\d{4}[\s.-]*\d{4}\b|(?:\+?\s*56[\s.-]*)?\b[2-7]\d[\s.-]*\d{3,4}[\s.-]*\d{4}\b/;
+  const telFmt=t=>{let d=String(t).replace(/\D/g,'');if(d.startsWith('56'))d=d.slice(2);if(d.startsWith('09'))d=d.slice(1);if(d.length===9&&d[0]==='9')return'+56 9 '+d.slice(1,5)+' '+d.slice(5);if(d.length===8)return'+56 9 '+d.slice(0,4)+' '+d.slice(4);if(d.length===9)return'+56 '+d;return String(t).trim()};
+  const MAILRE=/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/;
+  const capi=s=>s.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu,(m,a,b)=>a+b.toUpperCase()).replace(/\s(De|Del|La|Las|Los|Y)(?=\s)/g,w=>w.toLowerCase());
+  const lev=(a,b)=>{if(Math.abs(a.length-b.length)>2)return 9;const d=[...Array(b.length+1).keys()];for(let i=1;i<=a.length;i++){let pv=d[0];d[0]=i;for(let j=1;j<=b.length;j++){const t=d[j];d[j]=Math.min(d[j]+1,d[j-1]+1,pv+(a[i-1]===b[j-1]?0:1));pv=t}}return d[b.length]};
+  // comuna exacta, abreviada o con un error de tipeo
+  function comunaDe(t,difusa){const s=norm(t);if(!s)return'';if(ABREV[s])return ABREV[s];const h=CK.find(([k])=>k===s);if(h)return h[1];
+    if(difusa&&s.length>=5){let best='',bd=9;for(const[k,c]of CK){const d=lev(s,k);if(d<bd){bd=d;best=c}}if(bd<=(s.length>=8?2:1))return best}return''}
+  function comunaEn(t){const s=' '+norm(t)+' ';for(const[k,c]of Object.entries(ABREV))if(s.includes(' '+k+' '))return c;for(const[k,c]of CK)if(s.includes(' '+k+' '))return c;return''}
+  function regionDe(t){const s=' '+norm(t).replace(/\bregion( de| del)?\b/g,' ')+' ';for(const[re,v]of REGN)if(re.test(s))return v;return''}
+  function agenciaDe(t){const s=sa(t);for(const[k,v]of AG)if(new RegExp('\\b'+k+'\\b').test(s))return v;return''}
+  const CALLE=/\b(calle|av|avda|avenida|pje|psje|pasaje|villa|pobl|poblacion|camino|parcela|lote|sitio|condominio|block|depto|dpto|departamento|casa|torre|los|las|el|la|san|santa|nº|n°|#)\b|#|n[°º]/;
+  const SALUDO=/\b(hola|holi|buenas|buenos|buen dia|gracias|saludos|datos|envio|enviar|envie|aqui|aca|mis|son|van|para el|para la|por favor|porfa|pls|bendiciones|abrazo)\b/;
+  const esNombre=v=>{const x=v.replace(/[^\p{L}' .-]/gu,' ').replace(/\s+/g,' ').trim();if(!x||/\d|@/.test(v))return false;const w=x.split(' ');return w.length>=2&&w.length<=6&&!SALUDO.test(sa(x))&&!CALLE.test(sa(x).replace(/\b(los|las|el|la|san|santa)\b/g,''))&&!agenciaDe(x)&&!comunaDe(x)&&!regionDe(' region '+x+' ')?true:w.length>=2&&w.length<=6&&!SALUDO.test(sa(x))&&!agenciaDe(x)&&!comunaDe(x)&&!/\b(calle|av|avenida|pasaje|pje|villa|poblacion|block|depto|casa|region|comuna)\b/.test(sa(x))};
+  const esDireccion=v=>/\p{L}/u.test(v)&&/\d/.test(v)&&!MAILRE.test(v)&&!RUTRE.test(v)&&v.replace(/\D/g,'').length<=8&&(CALLE.test(sa(v))||/\p{L}{3,}\s+#?\s*\d{1,5}\b/u.test(v));
+  const limpia=v=>String(v||'').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu,'').replace(/^[\s:=\-–—•*·.,;]+|[\s,;.\-–—•*·]+$/g,'').trim();
   function interpretar(txt){
-    const out={};const lineas=String(txt||'').replace(/\r/g,'').split(/\n|;|\s{3,}/).map(l=>l.replace(/^[\s•\-*·>✅👉📦📍📞✉️🏠🙋‍♀️👤]+/u,'').trim()).filter(Boolean);
-    if(lineas.length<=2){const l2=[];for(const l of lineas)l2.push(...l.split(/,\s+|(?<!\b(?:[Aa]v|[Aa]vda|[Pp]je|[Pp]sje|[Ss]ta|[Gg]ral|[Nn]ro|[Nn]|[Dd]pto|[Dd]epto|[Cc]ond))\.\s+|\s+-\s+/));lineas.length=0;lineas.push(...l2.map(x=>x.trim()).filter(Boolean))}
-    const sueltas=[];
-    {const an=String(txt||'').match(/a nombre de\s+([\p{L}' ]{3,60}?)(?=[,.;\n]|\s+(?:rut|run|cel|fono|tel)|$)/iu);if(an)out.nombre=an[1].trim()}
-    for(const l of lineas){
-      const m=l.match(/^([^:=]{2,40}?)\s*[:=]\s*(.+)$/);
-      if(m){const k=sa(m[1]).replace(/[^a-z0-9 \-°º]/g,'').replace(/\s+/g,' ').trim();const hit=KEYS.find(([,re])=>re.test(k));
-        if(hit){const v=m[2].trim();if(hit[0]==='depto')out.depto=(out.depto?out.depto+' ':'')+m[1].trim()+' '+v;else if(!out[hit[0]])out[hit[0]]=v;continue}}
-      const lm=l.match(/^(rut|run|cel(?:ular)?|fono|tel(?:efono|éfono)?|correo|mail|comuna|region|región|direcci[oó]n)\s+(.+)$/i);
-      if(lm){const k=sa(lm[1]);const v=lm[2].trim();const key=k.startsWith('ru')?'rut':/^(cel|fono|tel)/.test(k)?'tel':/correo|mail/.test(k)?'correo':k==='comuna'?'comuna':k.startsWith('reg')?'region':'direccion';if(!out[key])out[key]=v;continue}
-      if(/a nombre de/i.test(l))continue;
-      sueltas.push(l)}
-    const todo=lineas.join('\n');
-    // detección sin etiquetas
-    if(!out.correo){const e=todo.match(/[\w.+-]+@[\w-]+\.[\w.]+/);if(e)out.correo=e[0]}
-    if(!out.rut){const r=todo.match(/\b\d{1,2}\.?\d{3}\.?\d{3}\s*-\s*[\dkK]\b/);if(r)out.rut=r[0]}
-    if(!out.tel){const t=todo.replace(/\b\d{1,2}\.?\d{3}\.?\d{3}\s*-\s*[\dkK]\b/g,'').match(/(\+?\s*56)?[\s-]*9[\s-]*\d{4}[\s-]*\d{4}\b/);if(t)out.tel=t[0]}
-    if(!out.agencia){const s=sa(todo);for(const[k,v]of AG)if(s.includes(k)){out.agencia=v;break}}
-    if(!out.region){const s=' '+sa(todo).replace(/[^a-z' ]/g,' ').replace(/\s+/g,' ')+' ';for(const[k,v]of REG)if(s.includes(' region '+k+' ')||s.includes(' region de '+k+' ')||s.includes(' region del '+k+' ')||s.includes(' '+k+' region ')||((k==='metropolitana'||k==='rm')&&s.includes(' '+k+' '))){out.region=v;break}}
-    // líneas sin etiqueta: dirección, nombre
-    for(const l of sueltas){const s=sa(l);
-      if(out.correo&&l.includes(out.correo))continue;
-      const sinDatos=l.replace(out.rut||'@@','').replace(out.tel||'@@','').replace(out.correo||'@@','').trim();
-      if(!sinDatos)continue;
-      if(!out.direccion&&(/\d/.test(sinDatos)&&/(calle|av(enida)?\.?|pje|pasaje|psje|villa|pobl|camino|parcela|lote|sitio|#|n°|nº|numero|block|depto|dpto|casa|condominio|\b\d{2,5}\b)/.test(s))&&!/^\+?\d[\d\s-]+$/.test(sinDatos)){out.direccion=sinDatos.replace(/^(direcci[oó]n|dir)\s*/i,'');continue}
-      if(!out.nombre&&/^[\p{L}' .]{5,60}$/u.test(sinDatos)&&sinDatos.trim().split(/\s+/).length>=2&&sinDatos.trim().split(/\s+/).length<=5&&!buscarComunaExacta(sinDatos)&&!/(hola|gracias|buen|envio|enviar|datos|starken|chilexpress|blue|correos|region|comuna|retiro|sucursal)/.test(s)){out.nombre=sinDatos;continue}
-      if(!out.comuna){const c=buscarComunaExacta(sinDatos);if(c){out.comuna=c;continue}}
+    let T=String(txt||'').replace(/\r/g,'').replace(/[“”"]/g,'');
+    const out={},otros=[];
+    // 1) partir por etiquetas aunque vengan varias en la misma línea ("Nombre: X Rut: Y")
+    const TN=T.replace(/[ÁÀÄÂáàäâ]/g,'a').replace(/[ÉÈËÊéèëê]/g,'e').replace(/[ÍÌÏÎíìïî]/g,'i').replace(/[ÓÒÖÔóòöô]/g,'o').replace(/[ÚÙÜÛúùüû]/g,'u');
+    const partes=[];let m,last=0,lastKey=null,lastLab='';LABRE.lastIndex=0;
+    while((m=LABRE.exec(TN))){const ini=m.index+m[1].length;const antes=T.slice(last,ini);if(lastKey)partes.push([lastKey,antes,lastLab]);else if(antes.trim())otros.push(antes);lastKey=quien(m[2]);lastLab=T.substr(ini,m[2].length);last=LABRE.lastIndex}
+    if(lastKey)partes.push([lastKey,T.slice(last),lastLab]);else otros.push(T.slice(last));
+    // el valor de una etiqueta termina en el salto de línea; lo que sigue en otras líneas queda suelto
+    const pend=[];
+    for(let[k,v,lab]of partes){const ls=v.split('\n');const val=limpia(ls[0]);if(ls.slice(1).join('\n').trim())otros.push(ls.slice(1).join('\n'));if(val&&k!=='nombre'&&k!=='correo'){const fr=val.split(/(?<!\b(?:[Aa]v|[Aa]vda|[Pp]je|[Pp]sje|[Ss]ta|[Gg]ral|[Nn]ro|[Nn]|[Dd]pto|[Dd]epto|[Cc]ond))\.\s+/);if(fr.length>1){otros.push(fr.slice(1).join('\n'));pend.push([k,limpia(fr[0])]);continue}}
+      if(val)pend.push([k,k==='depto'&&/^[\w-]{1,6}$/.test(val)?capi(lab)+' '+val:val])}
+    // 2) validar cada valor etiquetado; si no corresponde, se re-clasifica
+    const sueltos=[];
+    for(const[k,v]of pend){
+      if(k==='rut'){const r=v.match(RUTRE)||v.replace(/\./g,'').match(/\b(\d{7,8})([\dkK])\b/);if(r&&!out.rut){out.rut=r[0];const resto=limpia(v.replace(r[0],''));if(resto)sueltos.push(resto)}else sueltos.push(v);continue}
+      if(k==='tel'){const t=v.match(TELRE);if(t&&!out.tel){out.tel=t[0];const resto=limpia(v.replace(t[0],''));if(resto)sueltos.push(resto)}else sueltos.push(v);continue}
+      if(k==='correo'){const e=v.match(MAILRE);if(e&&!out.correo)out.correo=e[0];else sueltos.push(v);continue}
+      if(k==='comuna'||k==='ciudad'){const c=comunaDe(v,true)||comunaEn(v);if(c&&!out.comuna){out.comuna=c;const rg=regionDe(v);if(rg&&!out.region)out.region=rg}else if(!out.ciudad)out.ciudad=v;continue}
+      if(k==='region'){const rg=regionDe(v);if(rg&&!out.region)out.region=rg;else sueltos.push(v);continue}
+      if(k==='agencia'){const a=agenciaDe(v);if(a&&!out.agencia){out.agencia=a;out.agTxt=v}else if(a)out.agTxt=(out.agTxt||'')+' '+v;else if(!out.nota)out.nota=v;else out.nota+=' · '+v;continue}
+      if(k==='depto'){out.depto=(out.depto?out.depto+' ':'')+v;continue}
+      if(k==='nota'){out.nota=(out.nota?out.nota+' · ':'')+v;continue}
+      if(k==='nombre'){if(!/\d/.test(v)&&!out.nombre){out.nombre=v}else sueltos.push(v);continue}
+      if(k==='direccion'){if(!out.direccion&&!MAILRE.test(v)&&!RUTRE.test(v)){out.direccion=v}else sueltos.push(v);continue}
     }
-    if(!out.comuna){const base=[out.direccion,out.ciudad,...sueltas].filter(Boolean).join(' ');const c=buscarComuna(base);if(c)out.comuna=c}
-    else{const c=buscarComuna(out.comuna);if(c)out.comuna=c}
-    if(out.depto&&out.direccion)out.direccion+=', '+out.depto;else if(out.depto)out.direccion=out.depto;delete out.depto;
+    // 3) texto sin etiqueta: líneas, y si es una sola línea, frases separadas por comas
+    let lin=otros.join('\n').split('\n').map(limpia).filter(Boolean);
+    if(lin.length<=2&&!partes.length){const l2=[];for(const l of lin)l2.push(...l.split(/,\s+|(?<!\b(?:[Aa]v|[Aa]vda|[Pp]je|[Pp]sje|[Ss]ta|[Gg]ral|[Nn]ro|[Nn]|[Dd]pto|[Dd]epto|[Cc]ond))\.\s+|\s+-\s+|\s+y\s+(?=(?:rut|run|cel|fono|tel|correo|mail)\b)/i));lin=l2.map(limpia).filter(Boolean)}
+    lin.push(...sueltos);
+    const restos=[];
+    for(let l of lin){
+      // sacar lo que se reconoce por su forma
+      const e=l.match(MAILRE);if(e){if(!out.correo)out.correo=e[0];l=limpia(l.replace(e[0],''))}
+      const r=l.match(RUTRE);if(r){if(!out.rut)out.rut=r[0];l=limpia(l.replace(r[0],'').replace(/\b(rut|run)\b\s*:?/i,''))}
+      const t=l.match(TELRE);if(t&&t[0].replace(/\D/g,'').length>=8&&!(out.direccion&&out.direccion.includes(t[0]))){if(!out.tel){out.tel=t[0];l=limpia(l.replace(t[0],'').replace(/\b(cel(ular)?|fono|tel(efono)?|whatsapp|wsp|numero)\b\s*:?/i,''))}}
+      if(!l)continue;
+      const an=l.match(/a nombre de\s+(.+)$/i);if(an){if(!out.nombre&&esNombre(limpia(an[1])))out.nombre=limpia(an[1]);continue}
+      restos.push(l)}
+    // 4) clasificar lo que queda: agencia, región, comuna, dirección, nombre
+    const sinUsar=[];
+    for(const l of restos){const s=sa(l);
+      const ag=agenciaDe(l);const soloAg=ag&&norm(l).split(' ').length<=6&&!/\d{2,}/.test(l);
+      if(ag&&!out.agencia){out.agencia=ag;out.agTxt=l;if(soloAg)continue}
+      else if(ag&&soloAg){out.agTxt=(out.agTxt||'')+' '+l;continue}
+      if(/^(region|reg\.?)\b/.test(s)||/\bregion\b/.test(s)&&norm(l).split(' ').length<=4){const rg=regionDe(l);if(rg){if(!out.region)out.region=rg;const c=comunaEn(l.replace(/regi[oó]n.*$/i,''));if(c&&!out.comuna)out.comuna=c;continue}}
+      const c=comunaDe(l,true);if(c){if(!out.comuna)out.comuna=c;continue}
+      if(/,/.test(l)&&!/\d/.test(l)){const ps=l.split(/\s*,\s*/).filter(Boolean);const cs=ps.map(x=>comunaDe(x,true)),rs=ps.map(x=>/region|rm|metropolitana/i.test(x)?regionDe(x):'');
+        if(ps.every((x,i)=>cs[i]||rs[i])){cs.filter(Boolean).forEach(cc=>{if(!out.comuna)out.comuna=cc});rs.filter(Boolean).forEach(rr=>{if(!out.region)out.region=rr});continue}}
+      if(esDireccion(l)&&!out.direccion){out.direccion=l;continue}
+      if(!out.nombre&&esNombre(l)){out.nombre=l;continue}
+      if(/^(depto|dpto|departamento|casa|block|torre|piso|of(icina)?)\b/i.test(l)){out.depto=(out.depto?out.depto+' ':'')+l;continue}
+      sinUsar.push(l)}
+    // la comuna puede venir dentro de la dirección ("Pasaje 3 #45, Puente Alto")
+    if(out.direccion){const partesD=out.direccion.split(/\s*,\s*/);
+      while(partesD.length>1){const ult=partesD[partesD.length-1];const c=comunaDe(ult,true),rg=regionDe(' region '+ult+' ')&&/region|rm|metropolitana/i.test(ult)?regionDe(ult):'';
+        if(c){if(!out.comuna)out.comuna=c;partesD.pop()}else if(rg){if(!out.region)out.region=rg;partesD.pop()}else break}
+      out.direccion=partesD.join(', ')}
+    if(!out.comuna){const c=comunaEn([out.direccion,out.ciudad,...sinUsar].filter(Boolean).join(' , '));if(c)out.comuna=c}
+    if(!out.region){for(const l of sinUsar.concat(out.ciudad||[])){if(/region|rm\b|metropolitana/i.test(l)){const rg=regionDe(l);if(rg){out.region=rg;break}}}}
+    if(!out.region&&out.comuna&&REGDE[out.comuna])out.region=REGDE[out.comuna];
+    if(out.depto){out.direccion=out.direccion?out.direccion+', '+out.depto:out.depto}
+    // formatos finales
     if(out.rut){const r=rutOk(out.rut);if(r){out.rut=r.fmt;out.rutMalo=!r.valido}}
     if(out.tel)out.tel=telFmt(out.tel);
     if(out.nombre)out.nombre=capi(out.nombre.replace(/\s+/g,' ').trim());
     if(out.correo)out.correo=out.correo.toLowerCase();
-    if(out.agencia){const s=sa(out.agencia),t=sa(todo);const a=AG.find(([k])=>s.includes(k));if(a)out.agencia=a[1];if(!/retiro/.test(sa(out.agencia))){if(/sucursal|oficina/.test(t))out.agencia+=' · a sucursal';else if(/domicilio/.test(t))out.agencia+=' · a domicilio'}}
-    if(out.ciudad&&!out.comuna){const c=buscarComuna(out.ciudad);if(c)out.comuna=c}
-    delete out.ciudad;
-    if(out.region){const r=REG.find(([k])=>sa(out.region).includes(k));if(r)out.region=r[1]}
-    if(!out.region&&out.comuna&&REGDE[out.comuna])out.region=REGDE[out.comuna];
+    if(out.direccion)out.direccion=out.direccion.replace(/\s+/g,' ').replace(/^./,c=>c.toUpperCase());
+    if(out.agencia&&!/retiro|uber/i.test(out.agencia)){const t=sa(out.agTxt||'')+' '+sa(T);if(/sucursal|oficina|agencia/.test(t))out.agencia+=' · a sucursal';else if(/domicilio|a la casa|a mi casa/.test(t))out.agencia+=' · a domicilio';if(/por pagar/.test(t))out.agencia+=' · por pagar'}
+    const notas=[out.nota,...sinUsar.filter(l=>!SALUDO.test(sa(l))||l.length>25)].filter(Boolean);
+    delete out.depto;delete out.ciudad;delete out.agTxt;delete out.nota;if(notas.length)out.nota=notas.join(' · ');
     return out}
-  function buscarComunaExacta(t){const s=sa(t).replace(/[^a-zñ' ]/g,' ').replace(/\s+/g,' ').trim();const h=CK.find(([k])=>k===s);return h?h[1]:''}
   function texto(p){const e=p.envio||{};return[p.cliente&&'Nombre: '+p.cliente,e.rut&&'RUT: '+e.rut,p.tel&&'Teléfono: '+p.tel,e.correo&&'Correo: '+e.correo,e.direccion&&'Dirección: '+e.direccion,e.comuna&&'Comuna: '+e.comuna,e.region&&'Región: '+e.region,e.agencia&&'Envío: '+e.agencia].filter(Boolean).join('\n')}
   return{interpretar,texto,rutOk}
 })();
-
 function formPedido(id){
   const p=id?S.pedidos.find(x=>x.id===id):{cliente:'',tel:'',sec:'ramos',detalle:'',entrega:hoy(),total:'',abono:'',nota:'',estado:'pendiente'};
   if(!p)return;
@@ -1553,6 +1612,7 @@ function formPedido(id){
     $('#eRut').oninput=rutW;rutW();
     const aplicar=txt=>{const d=ENVIO.interpretar(txt);const map={nombre:'qc',tel:'qt',rut:'eRut',correo:'eMail',direccion:'eDir',comuna:'eCom',region:'eReg',agencia:'eAg'};let n=0;
       for(const[k,el]of Object.entries(map))if(d[k]){const i=$('#'+el);i.value=d[k];i.classList.remove('rell');void i.offsetWidth;i.classList.add('rell');n++}
+      if(d.nota&&!$('#qn').value.trim()){$('#qn').value=d.nota;n++}
       if(d.direccion||d.rut||d.agencia||d.comuna)$('#qEnv').open=true;rutW();
       $('#qRes').innerHTML=n?`<div class="hint" style="margin:-2px 0 12px">✓ Rellené ${n} ${n===1?'dato':'datos'}. Revísalos antes de guardar.</div>`:`<div class="warn" style="margin:-2px 0 12px">No encontré datos en ese mensaje.</div>`;return n};
     $('#qMsg').oninput=()=>{const t=$('#qMsg').value;if(t.trim().length>8&&aplicar(t))$('#qPasteBox').hidden=true};
