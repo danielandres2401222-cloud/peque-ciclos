@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Pequeciclos">
 <meta name="theme-color" content="#fbf7f1">
-<link rel="apple-touch-icon" href="icon-180.png">
-<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icono-pc-180.png">
+<link rel="icon" href="icono-pc-192.png">
 <link rel="manifest" href="manifest.json">
 <script>try{if(localStorage.getItem("pc_tema_neg")==="dark"){document.documentElement.dataset.theme="dark";}var f=localStorage.getItem("pc_fondo_neg");document.documentElement.dataset.fx=(["seda","aurora","liquido","petalos","burbujas","imagen","none"].indexOf(f)>=0)?f:"seda";}catch(e){}</script>
 <style>
@@ -115,6 +115,10 @@ nav.tabs button.on{color:var(--rosa)}
 .uline .q input{flex:1;min-width:0}
 .uline .q .qx{font-weight:700}
 .uline .qcost{grid-column:1/-1;font-size:12.5px;color:var(--muted);margin-top:-2px}
+.envio{border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:0 0 14px;background:var(--card)}
+.envio summary{font-weight:650;cursor:pointer;color:var(--rosa-ink);padding:2px 0;list-style:none}.envio summary::-webkit-details-marker{display:none}
+.envio summary::after{content:'▾';float:right;color:var(--muted)}.envio[open] summary{margin-bottom:10px}.envio[open] summary::after{content:'▴'}
+@keyframes rell{0%{background:var(--azul-2)}100%{background:var(--field)}}input.rell{animation:rell 1.6s ease}
 .areabox{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end}
 .areabox .x2{padding-bottom:12px;font-weight:700;color:var(--muted)}
 .uline select,.uline input{color:var(--ink);border:1px solid var(--line);background:var(--field);border-radius:10px;padding:10px;font-size:16px;width:100%;-webkit-appearance:none}
@@ -134,7 +138,7 @@ nav.tabs button.on{color:var(--rosa)}
 .install{background:var(--rosa-2);color:var(--rosa-ink);border-radius:14px;padding:12px 14px;font-size:14px;margin:12px 0}
 
 html[data-theme=dark],html[data-fx=galaxia],html[data-fx=imagen],html[data-fx=via-lactea],html[data-fx=cielo-profundo],html[data-fx^=cc-]{--bg:#1a1511;--card:#251e18;--field:#2d241d;--ink:#f5ebe0;--muted:#bba48c;--line:#3a2f25;--rosa:#d4ab7f;--rosa-2:#4a3a2a;--rosa-ink:#e8c9a4;--rosa-3:#2f261e;--azul:#c4a6e6;--azul-2:#3a2d4a;--verde:#5ccf96;--verde-2:#183326;--rojo:#ff7b72;--rojo-2:#3d1d1b;--sombra:0 1px 2px rgba(0,0,0,.45),0 4px 16px rgba(0,0,0,.25);--hdr:rgba(26,21,17,.9);--navbg:rgba(33,27,22,.94);color-scheme:dark}
-html[data-theme=dark] .sheet .grab{background:#5a2c3e}
+html[data-theme=dark] .sheet .grab{background:var(--rosa-2)}
 html[data-theme=dark] .scrim{background:rgba(0,0,0,.55)}
 header.top .thb{position:absolute;right:16px;top:calc(12px + var(--top));border:0;background:var(--rosa-2);color:var(--rosa-ink);width:38px;height:38px;border-radius:12px;font-size:17px;display:flex;align-items:center;justify-content:center}
 nav.tabs button{font-size:10.5px}
@@ -1365,8 +1369,45 @@ function vPedidos(){
   bindPeds();
 }
 function bindPeds(){document.querySelectorAll('[data-ped]').forEach(el=>el.onclick=()=>formPedido(el.dataset.ped))}
+function waNum(p){let n=String(p.tel||'').replace(/\D/g,'');if(!n)return'';if(n.length===9&&n[0]==='9')n='56'+n;if(n.length===8)n='569'+n;return n}
+/* ===== Comprobante de envío por WhatsApp ===== */
+async function formComprobante(p,aviso){
+  const e=p.envio||{},ev=p.enviado||{};const nom=(p.cliente||'').trim().split(/\s+/)[0]||'';
+  const fotoK='comp_'+p.id;let foto=ev.foto?await idbGetK(fotoK).catch(()=>null):null;let editado=false;
+  abrir(`${aviso?`<div class="hint" style="margin:0 0 10px;color:var(--verde);font-weight:650">${esc(aviso)}</div>`:''}
+  <h2>📦 Avisar envío por WhatsApp</h2>
+  <p class="small muted" style="margin:-6px 0 12px">Para: <b>${esc(p.cliente||'cliente')}</b>${p.tel?' · '+esc(p.tel):''}</p>
+  <div class="f"><label>Foto del comprobante</label>
+    <img id="cImg" class="cbig" ${foto?'':'hidden'} alt="Comprobante">
+    <button class="btn in" id="cFoto" style="width:100%">📷 ${foto?'Cambiar foto':'Agregar foto del comprobante'}</button>
+    <input type="file" id="cFile" accept="image/*" hidden></div>
+  <div class="f2"><div class="f"><label>Envío por</label><input id="cAg" list="eAgL2" value="${esc(ev.agencia||(e.agencia||'').replace(/ · .*/,''))}" placeholder="Starken…"><datalist id="eAgL2"><option>Starken</option><option>Chilexpress</option><option>Blue Express</option><option>Correos de Chile</option><option>Retiro en persona</option></datalist></div>
+    <div class="f"><label>N° de seguimiento</label><input id="cSeg" value="${esc(ev.seguimiento||'')}" placeholder="Opcional"></div></div>
+  <div class="f"><label>Mensaje</label><textarea id="cMsg" rows="9"></textarea></div>
+  <button class="btn wa" id="cWa" style="margin-bottom:10px">Enviar por WhatsApp</button>
+  <div id="cAlt"></div>
+  <button class="btn sec" id="cOk">Listo</button>`,()=>{
+    const img=$('#cImg');if(foto){img.src=URL.createObjectURL(foto)}
+    const armar=()=>{const ag=$('#cAg').value.trim(),seg=$('#cSeg').value.trim();
+      if(/retiro/i.test(ag))return`¡Hola${nom?' '+nom:''}! 🧸\nMuchas gracias por retirar tu pedido de *${p.detalle}*.\nEspero que lo disfruten mucho 💛\n\n— ${S.config.negocio}`;
+      return`¡Hola${nom?' '+nom:''}! 🧸\nTu pedido de *${p.detalle}* ya fue enviado${ag?` por *${ag}*`:''} 📦\n${seg?`N° de seguimiento: *${seg}*\n`:''}${e.direccion?`Destino: ${e.direccion}${e.comuna?', '+e.comuna:''}\n`:''}${foto?'Te adjunto el comprobante de envío.\n':''}\nCualquier duda me escribes. ¡Gracias por tu compra! 💛\n\n— ${S.config.negocio}`};
+    const pinta=()=>{if(!editado)$('#cMsg').value=armar();
+      const n=waNum(p);$('#cAlt').innerHTML=foto&&n?`<a class="btn sec" id="cChat" style="margin-bottom:10px;text-decoration:none" href="https://wa.me/${n}?text=${encodeURIComponent($('#cMsg').value)}" target="_blank" rel="noopener">Abrir su chat (adjuntas la foto tú)</a>`:(!n?'<div class="hint" style="margin:-4px 0 10px">No hay teléfono en el pedido: al enviar eliges el chat en WhatsApp.</div>':'')};
+    $('#cMsg').oninput=()=>{editado=true;pinta()};$('#cAg').oninput=pinta;$('#cSeg').oninput=pinta;pinta();
+    $('#cFoto').onclick=()=>$('#cFile').click();
+    $('#cFile').onchange=async ev2=>{const f=ev2.target.files[0];if(!f)return;try{foto=await achicar(f)}catch(_){foto=f}img.src=URL.createObjectURL(foto);img.hidden=false;$('#cFoto').innerHTML='📷 Cambiar foto';pinta()};
+    const guardarEnvio=async()=>{p.enviado={agencia:$('#cAg').value.trim(),seguimiento:$('#cSeg').value.trim(),fecha:hoy(),foto:!!foto};if(foto)await idbSet(fotoK,foto).catch(()=>{});await guardar()};
+    $('#cWa').onclick=async()=>{const msg=$('#cMsg').value;await guardarEnvio();
+      try{await navigator.clipboard.writeText(msg)}catch(_){}
+      if(foto){const file=new File([foto],'comprobante-envio.jpg',{type:foto.type||'image/jpeg'});
+        if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],text:msg});toast('Elige WhatsApp y el chat de la clienta');return}catch(err){if(err&&err.name==='AbortError')return}}}
+      const n=waNum(p);window.open(n?`https://wa.me/${n}?text=${encodeURIComponent(msg)}`:`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+      if(foto)toast('Mensaje copiado. Adjunta la foto en el chat')};
+    $('#cOk').onclick=async()=>{await guardarEnvio();cerrar();render(false)};
+  });
+}
 function waLink(p){let n=String(p.tel||'').replace(/\D/g,'');if(!n)return'';if(n.length===9&&n[0]==='9')n='56'+n;if(n.length===8)n='569'+n;
-  const f=falta(p);const msg=`Hola ${p.cliente}! `+(p.estado==='listo'?`Tu pedido (${p.detalle}) ya está listo 🌸`:`Te confirmo tu pedido (${p.detalle}) para el ${fFecha(p.entrega)} 🌸`)+(f>0?` Saldo pendiente: ${$$(f)}.`:'');
+  const f=falta(p);const msg=`Hola ${p.cliente}! `+(p.estado==='listo'?`Tu pedido (${p.detalle}) ya está listo 🧸`:`Te confirmo tu pedido (${p.detalle}) para el ${fFecha(p.entrega)} 🧸`)+(f>0?` Saldo pendiente: ${$$(f)}.`:'');
   return 'https://wa.me/'+n+'?text='+encodeURIComponent(msg)}
 
 /* ---- Mis ramos (recetas): materiales por ramo para descontar stock automáticamente ---- */
@@ -1402,6 +1443,67 @@ async function ventaDePedido(p){
   if(!m)return false;S.movs.push(m);p.movId=m.id;await guardar();return true;
 }
 
+/* ===== Datos de envío: pegar el mensaje de la clienta y rellenar solo ===== */
+const ENVIO=(()=>{
+  const sa=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+  const COMUNAS='Arica,Camarones,Putre,General Lagos,Iquique,Alto Hospicio,Pozo Almonte,Camiña,Colchane,Huara,Pica,Antofagasta,Mejillones,Sierra Gorda,Taltal,Calama,Ollagüe,San Pedro de Atacama,Tocopilla,María Elena,Copiapó,Caldera,Tierra Amarilla,Chañaral,Diego de Almagro,Vallenar,Alto del Carmen,Freirina,Huasco,La Serena,Coquimbo,Andacollo,La Higuera,Paiguano,Vicuña,Illapel,Canela,Los Vilos,Salamanca,Ovalle,Combarbalá,Monte Patria,Punitaqui,Río Hurtado,Valparaíso,Casablanca,Concón,Juan Fernández,Puchuncaví,Quintero,Viña del Mar,Isla de Pascua,Los Andes,Calle Larga,Rinconada,San Esteban,La Ligua,Cabildo,Papudo,Petorca,Zapallar,Quillota,La Calera,Hijuelas,La Cruz,Nogales,San Antonio,Algarrobo,Cartagena,El Quisco,El Tabo,Santo Domingo,San Felipe,Catemu,Llaillay,Panquehue,Putaendo,Santa María,Quilpué,Limache,Olmué,Villa Alemana,Rancagua,Codegua,Coinco,Coltauco,Doñihue,Graneros,Las Cabras,Machalí,Malloa,Mostazal,Olivar,Peumo,Pichidegua,Quinta de Tilcoco,Rengo,Requínoa,San Vicente,Pichilemu,La Estrella,Litueche,Marchigüe,Navidad,Paredones,San Fernando,Chépica,Chimbarongo,Lolol,Nancagua,Palmilla,Peralillo,Placilla,Pumanque,Santa Cruz,Talca,Constitución,Curepto,Empedrado,Maule,Pelarco,Pencahue,Río Claro,San Clemente,San Rafael,Cauquenes,Chanco,Pelluhue,Curicó,Hualañé,Licantén,Molina,Rauco,Romeral,Sagrada Familia,Teno,Vichuquén,Linares,Colbún,Longaví,Parral,Retiro,San Javier,Villa Alegre,Yerbas Buenas,Chillán,Bulnes,Chillán Viejo,El Carmen,Pemuco,Pinto,Quillón,San Ignacio,Yungay,Quirihue,Cobquecura,Coelemu,Ninhue,Portezuelo,Ránquil,Treguaco,San Carlos,Coihueco,Ñiquén,San Fabián,San Nicolás,Concepción,Coronel,Chiguayante,Florida,Hualqui,Lota,Penco,San Pedro de la Paz,Santa Juana,Talcahuano,Tomé,Hualpén,Lebu,Arauco,Cañete,Contulmo,Curanilahue,Los Álamos,Tirúa,Los Ángeles,Antuco,Cabrero,Laja,Mulchén,Nacimiento,Negrete,Quilaco,Quilleco,San Rosendo,Santa Bárbara,Tucapel,Yumbel,Alto Biobío,Temuco,Carahue,Cunco,Curarrehue,Freire,Galvarino,Gorbea,Lautaro,Loncoche,Melipeuco,Nueva Imperial,Padre Las Casas,Perquenco,Pitrufquén,Pucón,Saavedra,Teodoro Schmidt,Toltén,Vilcún,Villarrica,Cholchol,Angol,Collipulli,Curacautín,Ercilla,Lonquimay,Los Sauces,Lumaco,Purén,Renaico,Traiguén,Victoria,Valdivia,Corral,Lanco,Los Lagos,Máfil,Mariquina,Paillaco,Panguipulli,La Unión,Futrono,Lago Ranco,Río Bueno,Puerto Montt,Calbuco,Cochamó,Fresia,Frutillar,Los Muermos,Llanquihue,Maullín,Puerto Varas,Castro,Ancud,Chonchi,Curaco de Vélez,Dalcahue,Puqueldón,Queilén,Quellón,Quemchi,Quinchao,Osorno,Puerto Octay,Purranque,Puyehue,Río Negro,San Juan de la Costa,San Pablo,Chaitén,Futaleufú,Hualaihué,Palena,Coyhaique,Lago Verde,Aysén,Cisnes,Guaitecas,Cochrane,O\'Higgins,Tortel,Chile Chico,Río Ibáñez,Punta Arenas,Laguna Blanca,Río Verde,San Gregorio,Cabo de Hornos,Antártica,Porvenir,Primavera,Timaukel,Natales,Torres del Paine,Santiago,Cerrillos,Cerro Navia,Conchalí,El Bosque,Estación Central,Huechuraba,Independencia,La Cisterna,La Florida,La Granja,La Pintana,La Reina,Las Condes,Lo Barnechea,Lo Espejo,Lo Prado,Macul,Maipú,Ñuñoa,Pedro Aguirre Cerda,Peñalolén,Providencia,Pudahuel,Quilicura,Quinta Normal,Recoleta,Renca,San Joaquín,San Miguel,San Ramón,Vitacura,Puente Alto,Pirque,San José de Maipo,Colina,Lampa,Tiltil,San Bernardo,Buin,Calera de Tango,Paine,Melipilla,Alhué,Curacaví,María Pinto,San Pedro,Talagante,El Monte,Isla de Maipo,Padre Hurtado,Peñaflor'.split(',');
+  const INI=[['Arica','Arica y Parinacota'],['Iquique','Tarapacá'],['Antofagasta','Antofagasta'],['Copiapó','Atacama'],['La Serena','Coquimbo'],['Valparaíso','Valparaíso'],['Rancagua',"O'Higgins"],['Talca','Maule'],['Chillán','Ñuble'],['Concepción','Biobío'],['Temuco','La Araucanía'],['Valdivia','Los Ríos'],['Puerto Montt','Los Lagos'],['Coyhaique','Aysén'],['Punta Arenas','Magallanes'],['Santiago','Metropolitana']];
+  const REGDE={};{let r='';COMUNAS.forEach(c=>{const h=INI.find(([k])=>k===c);if(h)r=h[1];REGDE[c]=r})}
+  const CK=COMUNAS.map(c=>[sa(c),c]).sort((a,b)=>b[0].length-a[0].length);
+  const REG=[['arica','Arica y Parinacota'],['tarapaca','Tarapacá'],['antofagasta','Antofagasta'],['atacama','Atacama'],['coquimbo','Coquimbo'],['valparaiso','Valparaíso'],['metropolitana','Metropolitana'],['rm','Metropolitana'],['santiago','Metropolitana'],["o'higgins","O'Higgins"],['ohiggins',"O'Higgins"],['libertador','O\'Higgins'],['maule','Maule'],['nuble','Ñuble'],['biobio','Biobío'],['bio bio','Biobío'],['araucania','La Araucanía'],['los rios','Los Ríos'],['los lagos','Los Lagos'],['aysen','Aysén'],['aisen','Aysén'],['magallanes','Magallanes']];
+  const AG=[['starken','Starken'],['chilexpress','Chilexpress'],['chile express','Chilexpress'],['blue express','Blue Express'],['bluexpress','Blue Express'],['correos de chile','Correos de Chile'],['correos','Correos de Chile'],['correo de chile','Correos de Chile'],['turbus','Turbus Cargo'],['tur bus','Turbus Cargo'],['pullman','Pullman Cargo'],['varmontt','Varmontt'],['shipit','Shipit'],['uber','Uber/Didi'],['didi','Uber/Didi'],['retiro','Retiro en persona'],['retira','Retiro en persona']];
+  const KEYS=[['nombre',/^(nombre(s)?( completo)?|destinatari[oa]|recibe|quien recibe|cliente|a nombre de)$/],['rut',/^(rut|run|rut destinatario)$/],['tel',/^(tel(efono)?|fono|cel(ular)?|numero( de (telefono|contacto|celular))?|whatsapp|wsp|contacto|movil)$/],['correo',/^(correo( electronico)?|e-?mail|mail)$/],['direccion',/^(direccion|domicilio|calle|direccion de (envio|entrega|despacho)|dir)$/],['depto',/^(depto|dpto|departamento|casa|block|torre|villa|poblacion|condominio|n(°|º|ro|umero)? (de )?(casa|depto))$/],['comuna',/^(comuna)$/],['ciudad',/^(ciudad|localidad)$/],['region',/^(region)$/],['agencia',/^(agencia|sucursal|courier|empresa( de envio)?|envio( por)?|enviar por|despacho( por)?|transporte)$/],['nota',/^(referencia(s)?|indicacion(es)?|obs(ervacion(es)?)?|nota|comentario(s)?)$/]];
+  const rutOk=r=>{const m=r.replace(/[.\s]/g,'').toUpperCase().match(/^(\d{7,8})-?([\dK])$/);if(!m)return null;let s=0,f=2;for(let i=m[1].length-1;i>=0;i--){s+=+m[1][i]*f;f=f===7?2:f+1}const dv=11-s%11,d=dv===11?'0':dv===10?'K':String(dv);return{fmt:m[1].replace(/\B(?=(\d{3})+(?!\d))/g,'.')+'-'+m[2],valido:d===m[2]}};
+  const telFmt=t=>{const d=t.replace(/\D/g,'').replace(/^56/,'');if(d.length===9&&d[0]==='9')return'+56 9 '+d.slice(1,5)+' '+d.slice(5);if(d.length===8)return'+56 9 '+d.slice(0,4)+' '+d.slice(4);if(d.length===9)return'+56 '+d;return t.trim()};
+  const capi=s=>s.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu,(m,a,b)=>a+b.toUpperCase()).replace(/\b(De|Del|La|Las|Los|Y)\b/g,w=>w.toLowerCase()).replace(/^(\p{L})/u,c=>c.toUpperCase());
+  function buscarComuna(t){const s=' '+sa(t).replace(/[^a-zñ' ]/g,' ').replace(/\s+/g,' ')+' ';for(const[k,c]of CK)if(s.includes(' '+k+' '))return c;return''}
+  function interpretar(txt){
+    const out={};const lineas=String(txt||'').replace(/\r/g,'').split(/\n|;|\s{3,}/).map(l=>l.replace(/^[\s•\-*·>✅👉📦📍📞✉️🏠🙋‍♀️👤]+/u,'').trim()).filter(Boolean);
+    if(lineas.length<=2){const l2=[];for(const l of lineas)l2.push(...l.split(/,\s+|(?<!\b(?:[Aa]v|[Aa]vda|[Pp]je|[Pp]sje|[Ss]ta|[Gg]ral|[Nn]ro|[Nn]|[Dd]pto|[Dd]epto|[Cc]ond))\.\s+|\s+-\s+/));lineas.length=0;lineas.push(...l2.map(x=>x.trim()).filter(Boolean))}
+    const sueltas=[];
+    {const an=String(txt||'').match(/a nombre de\s+([\p{L}' ]{3,60}?)(?=[,.;\n]|\s+(?:rut|run|cel|fono|tel)|$)/iu);if(an)out.nombre=an[1].trim()}
+    for(const l of lineas){
+      const m=l.match(/^([^:=]{2,40}?)\s*[:=]\s*(.+)$/);
+      if(m){const k=sa(m[1]).replace(/[^a-z0-9 \-°º]/g,'').replace(/\s+/g,' ').trim();const hit=KEYS.find(([,re])=>re.test(k));
+        if(hit){const v=m[2].trim();if(hit[0]==='depto')out.depto=(out.depto?out.depto+' ':'')+m[1].trim()+' '+v;else if(!out[hit[0]])out[hit[0]]=v;continue}}
+      const lm=l.match(/^(rut|run|cel(?:ular)?|fono|tel(?:efono|éfono)?|correo|mail|comuna|region|región|direcci[oó]n)\s+(.+)$/i);
+      if(lm){const k=sa(lm[1]);const v=lm[2].trim();const key=k.startsWith('ru')?'rut':/^(cel|fono|tel)/.test(k)?'tel':/correo|mail/.test(k)?'correo':k==='comuna'?'comuna':k.startsWith('reg')?'region':'direccion';if(!out[key])out[key]=v;continue}
+      if(/a nombre de/i.test(l))continue;
+      sueltas.push(l)}
+    const todo=lineas.join('\n');
+    // detección sin etiquetas
+    if(!out.correo){const e=todo.match(/[\w.+-]+@[\w-]+\.[\w.]+/);if(e)out.correo=e[0]}
+    if(!out.rut){const r=todo.match(/\b\d{1,2}\.?\d{3}\.?\d{3}\s*-\s*[\dkK]\b/);if(r)out.rut=r[0]}
+    if(!out.tel){const t=todo.replace(/\b\d{1,2}\.?\d{3}\.?\d{3}\s*-\s*[\dkK]\b/g,'').match(/(\+?\s*56)?[\s-]*9[\s-]*\d{4}[\s-]*\d{4}\b/);if(t)out.tel=t[0]}
+    if(!out.agencia){const s=sa(todo);for(const[k,v]of AG)if(s.includes(k)){out.agencia=v;break}}
+    if(!out.region){const s=' '+sa(todo).replace(/[^a-z' ]/g,' ').replace(/\s+/g,' ')+' ';for(const[k,v]of REG)if(s.includes(' region '+k+' ')||s.includes(' region de '+k+' ')||s.includes(' region del '+k+' ')||s.includes(' '+k+' region ')||((k==='metropolitana'||k==='rm')&&s.includes(' '+k+' '))){out.region=v;break}}
+    // líneas sin etiqueta: dirección, nombre
+    for(const l of sueltas){const s=sa(l);
+      if(out.correo&&l.includes(out.correo))continue;
+      const sinDatos=l.replace(out.rut||'@@','').replace(out.tel||'@@','').replace(out.correo||'@@','').trim();
+      if(!sinDatos)continue;
+      if(!out.direccion&&(/\d/.test(sinDatos)&&/(calle|av(enida)?\.?|pje|pasaje|psje|villa|pobl|camino|parcela|lote|sitio|#|n°|nº|numero|block|depto|dpto|casa|condominio|\b\d{2,5}\b)/.test(s))&&!/^\+?\d[\d\s-]+$/.test(sinDatos)){out.direccion=sinDatos.replace(/^(direcci[oó]n|dir)\s*/i,'');continue}
+      if(!out.nombre&&/^[\p{L}' .]{5,60}$/u.test(sinDatos)&&sinDatos.trim().split(/\s+/).length>=2&&sinDatos.trim().split(/\s+/).length<=5&&!buscarComunaExacta(sinDatos)&&!/(hola|gracias|buen|envio|enviar|datos|starken|chilexpress|blue|correos|region|comuna|retiro|sucursal)/.test(s)){out.nombre=sinDatos;continue}
+      if(!out.comuna){const c=buscarComunaExacta(sinDatos);if(c){out.comuna=c;continue}}
+    }
+    if(!out.comuna){const base=[out.direccion,out.ciudad,...sueltas].filter(Boolean).join(' ');const c=buscarComuna(base);if(c)out.comuna=c}
+    else{const c=buscarComuna(out.comuna);if(c)out.comuna=c}
+    if(out.depto&&out.direccion)out.direccion+=', '+out.depto;else if(out.depto)out.direccion=out.depto;delete out.depto;
+    if(out.rut){const r=rutOk(out.rut);if(r){out.rut=r.fmt;out.rutMalo=!r.valido}}
+    if(out.tel)out.tel=telFmt(out.tel);
+    if(out.nombre)out.nombre=capi(out.nombre.replace(/\s+/g,' ').trim());
+    if(out.correo)out.correo=out.correo.toLowerCase();
+    if(out.agencia){const s=sa(out.agencia),t=sa(todo);const a=AG.find(([k])=>s.includes(k));if(a)out.agencia=a[1];if(!/retiro/.test(sa(out.agencia))){if(/sucursal|oficina/.test(t))out.agencia+=' · a sucursal';else if(/domicilio/.test(t))out.agencia+=' · a domicilio'}}
+    if(out.ciudad&&!out.comuna){const c=buscarComuna(out.ciudad);if(c)out.comuna=c}
+    delete out.ciudad;
+    if(out.region){const r=REG.find(([k])=>sa(out.region).includes(k));if(r)out.region=r[1]}
+    if(!out.region&&out.comuna&&REGDE[out.comuna])out.region=REGDE[out.comuna];
+    return out}
+  function buscarComunaExacta(t){const s=sa(t).replace(/[^a-zñ' ]/g,' ').replace(/\s+/g,' ').trim();const h=CK.find(([k])=>k===s);return h?h[1]:''}
+  function texto(p){const e=p.envio||{};return[p.cliente&&'Nombre: '+p.cliente,e.rut&&'RUT: '+e.rut,p.tel&&'Teléfono: '+p.tel,e.correo&&'Correo: '+e.correo,e.direccion&&'Dirección: '+e.direccion,e.comuna&&'Comuna: '+e.comuna,e.region&&'Región: '+e.region,e.agencia&&'Envío: '+e.agencia].filter(Boolean).join('\n')}
+  return{interpretar,texto,rutOk}
+})();
+
 function formPedido(id){
   const p=id?S.pedidos.find(x=>x.id===id):{cliente:'',tel:'',sec:'ramos',detalle:'',entrega:hoy(),total:'',abono:'',nota:'',estado:'pendiente'};
   if(!p)return;
@@ -1409,7 +1511,11 @@ function formPedido(id){
   abrir(`<h2>${id?'Pedido':'Nuevo pedido'}</h2>
   ${id?`<div class="box"><div class="kv"><span>Estado</span><span>${ESTADO[p.estado]}</span></div><div class="kv"><span>Entrega</span><span>${fFecha(p.entrega)} · ${cuando(p.entrega).t}</span></div><div class="kv"><span>Falta por pagar</span><span class="${falta(p)>0?'neg':'pos'}">${$$(falta(p))}</span></div></div>
   <div class="btnrow">${p.estado==='pendiente'?`<button class="btn sec" id="eListo">Marcar listo</button>`:`<button class="btn sec" id="ePend">Volver a pendiente</button>`}${p.estado!=='entregado'?`<button class="btn out" id="eEnt">Entregado</button>`:(p.movId?`<button class="btn sec" disabled>Venta registrada ✓</button>`:`<button class="btn out" id="eVenta">Registrar venta</button>`)}</div>
-  ${wa?`<a class="btn wa" href="${wa}" target="_blank" rel="noopener" style="margin-bottom:12px;text-decoration:none">Enviar WhatsApp</a>`:''}`:''}
+  ${p.estado==='entregado'?`${p.enviado?`<div class="box"><div class="kv"><span>Enviado</span><span>${esc(p.enviado.agencia||'✓')}${p.enviado.seguimiento?' · N° '+esc(p.enviado.seguimiento):''}</span></div></div>`:''}<button class="btn wa" id="eComp" style="margin-bottom:12px">📦 ${p.enviado?'Reenviar aviso de envío':'Avisar envío por WhatsApp'}</button>`
+    :(wa?`<a class="btn wa" href="${wa}" target="_blank" rel="noopener" style="margin-bottom:12px;text-decoration:none">Enviar WhatsApp</a>`:'')}`:''}
+  <button class="btn in" id="qPaste" style="width:100%;margin-bottom:10px">📋 Pegar mensaje con datos</button>
+  <div id="qPasteBox" hidden><div class="f"><textarea id="qMsg" rows="4" placeholder="Mantén apretado aquí y toca Pegar: el mensaje de la clienta con sus datos"></textarea></div></div>
+  <div id="qRes"></div>
   <div class="f"><label>Cliente</label><input id="qc" value="${esc(p.cliente)}" placeholder="Nombre"></div>
   <div class="f2"><div class="f"><label>Teléfono (opcional)</label><input id="qt" inputmode="tel" value="${esc(p.tel||'')}" placeholder="9 1234 5678"></div>
     <div class="f"><label>Sección</label><select id="qs"><option value="ramos" ${p.sec==='ramos'?'selected':''}>Taller (encargo)</option><option value="ropa" ${p.sec==='ropa'?'selected':''}>Productos</option></select></div></div>
@@ -1417,7 +1523,15 @@ function formPedido(id){
   <div class="f"><label>¿Qué pidió?</label><input id="qd" value="${esc(p.detalle)}" placeholder="Ej: Nido colecho estampado estrellas"></div>
   <div class="f"><label>Fecha de entrega</label><input type="date" id="qf" value="${p.entrega}"></div>
   <div class="f2"><div class="f"><label>Precio total</label><input id="qp" inputmode="numeric" value="${p.total||''}" placeholder="$"></div><div class="f"><label>Abono</label><input id="qa" inputmode="numeric" value="${p.abono||''}" placeholder="$"></div></div>
-  <div class="f"><label>Nota (opcional)</label><input id="qn" value="${esc(p.nota||'')}" placeholder="Ej: dirección, colores, tarjeta"></div>
+  <details class="envio" id="qEnv" ${(p.envio&&Object.values(p.envio).some(Boolean))?'open':''}><summary>📦 Datos de envío</summary>
+    <div class="f2"><div class="f"><label>RUT</label><input id="eRut" value="${esc((p.envio||{}).rut||'')}" placeholder="12.345.678-9"></div><div class="f"><label>Correo</label><input id="eMail" inputmode="email" value="${esc((p.envio||{}).correo||'')}" placeholder="correo@..."></div></div>
+    <div id="eRutW"></div>
+    <div class="f"><label>Dirección</label><input id="eDir" value="${esc((p.envio||{}).direccion||'')}" placeholder="Calle, número, depto"></div>
+    <div class="f2"><div class="f"><label>Comuna</label><input id="eCom" value="${esc((p.envio||{}).comuna||'')}"></div><div class="f"><label>Región</label><input id="eReg" value="${esc((p.envio||{}).region||'')}"></div></div>
+    <div class="f"><label>Envío por</label><input id="eAg" list="eAgL" value="${esc((p.envio||{}).agencia||'')}" placeholder="Starken, Chilexpress, Blue Express…"><datalist id="eAgL"><option>Starken</option><option>Chilexpress</option><option>Blue Express</option><option>Correos de Chile</option><option>Retiro en persona</option></datalist></div>
+    ${id?'<button class="btn sec" id="eCopy" style="margin-bottom:6px">Copiar datos de envío</button>':''}
+  </details>
+  <div class="f"><label>Nota (opcional)</label><input id="qn" value="${esc(p.nota||'')}" placeholder="Ej: colores, bordado, tarjeta"></div>
   <div class="total"><span>Falta por pagar</span><b id="qfa">$0</b></div>
   <button class="btn pri" id="qok" style="margin-bottom:10px">Guardar pedido</button>
   ${id?`<button class="btn dan" id="qdel">Eliminar pedido</button>`:''}`,()=>{
@@ -1435,15 +1549,27 @@ function formPedido(id){
       $('#ql').onchange=()=>{const v=$('#ql').value,x=ropa?prod(v):receta(v);if(x){if(!$('#qd').value.trim())$('#qd').value=x.nombre+(x.detalle?' · '+x.detalle:'');if(!num($('#qp').value))$('#qp').value=Math.round((ropa?x.precio:x.precio)*(num($('#qq').value)||1))||'';sy()}chk()};
       $('#qq').oninput=()=>{const v=$('#ql').value,x=ropa?prod(v):receta(v);if(x&&x.precio)$('#qp').value=Math.round(x.precio*(num($('#qq').value)||1));sy();chk()};chk()};
     $('#qs').onchange=pintarLink;pintarLink();
-    const leer=()=>({...(bloqueado?{}:{prodId:$('#qs').value==='ropa'?($('#ql').value||null):null,recetaId:$('#qs').value==='ramos'?($('#ql').value||null):null,cant:Math.max(1,num($('#qq').value)||1)}),cliente:$('#qc').value.trim(),tel:$('#qt').value.trim(),sec:$('#qs').value,detalle:$('#qd').value.trim(),entrega:$('#qf').value||hoy(),total:num($('#qp').value),abono:num($('#qa').value),nota:$('#qn').value.trim()});
+    const rutW=()=>{const v=$('#eRut').value.trim();const r=v?ENVIO.rutOk(v):null;$('#eRutW').innerHTML=v&&(!r||!r.valido)?'<div class="warn" style="margin:-4px 0 12px">Este RUT no parece válido, revísalo con la clienta.</div>':''};
+    $('#eRut').oninput=rutW;rutW();
+    const aplicar=txt=>{const d=ENVIO.interpretar(txt);const map={nombre:'qc',tel:'qt',rut:'eRut',correo:'eMail',direccion:'eDir',comuna:'eCom',region:'eReg',agencia:'eAg'};let n=0;
+      for(const[k,el]of Object.entries(map))if(d[k]){const i=$('#'+el);i.value=d[k];i.classList.remove('rell');void i.offsetWidth;i.classList.add('rell');n++}
+      if(d.direccion||d.rut||d.agencia||d.comuna)$('#qEnv').open=true;rutW();
+      $('#qRes').innerHTML=n?`<div class="hint" style="margin:-2px 0 12px">✓ Rellené ${n} ${n===1?'dato':'datos'}. Revísalos antes de guardar.</div>`:`<div class="warn" style="margin:-2px 0 12px">No encontré datos en ese mensaje.</div>`;return n};
+    $('#qMsg').oninput=()=>{const t=$('#qMsg').value;if(t.trim().length>8&&aplicar(t))$('#qPasteBox').hidden=true};
+    $('#qPaste').onclick=async()=>{let t='';try{t=await navigator.clipboard.readText()}catch(e){}
+      if(t&&t.trim().length>8){aplicar(t);return}
+      $('#qPasteBox').hidden=false;const m=$('#qMsg');m.value='';m.focus();toast('Mantén apretado el cuadro y toca Pegar')};
+    const ec=$('#eCopy');if(ec)ec.onclick=async()=>{Object.assign(p,leer());const t=ENVIO.texto(p);try{await navigator.clipboard.writeText(t);toast('Datos de envío copiados')}catch(e){$('#qPasteBox').hidden=false;$('#qMsg').value=t;$('#qMsg').select();toast('Cópialo desde el cuadro')}};
+    const leer=()=>({...(bloqueado?{}:{prodId:$('#qs').value==='ropa'?($('#ql').value||null):null,recetaId:$('#qs').value==='ramos'?($('#ql').value||null):null,cant:Math.max(1,num($('#qq').value)||1)}),cliente:$('#qc').value.trim(),tel:$('#qt').value.trim(),sec:$('#qs').value,detalle:$('#qd').value.trim(),entrega:$('#qf').value||hoy(),total:num($('#qp').value),abono:num($('#qa').value),nota:$('#qn').value.trim(),envio:{rut:$('#eRut').value.trim(),correo:$('#eMail').value.trim(),direccion:$('#eDir').value.trim(),comuna:$('#eCom').value.trim(),region:$('#eReg').value.trim(),agencia:$('#eAg').value.trim()}});
     $('#qok').onclick=async()=>{const d=leer();if(!d.cliente)return toast('Escribe el nombre de la clienta o cliente');if(!d.detalle)return toast('Escribe qué pidió');
       if(id)Object.assign(p,d);else S.pedidos.push(Object.assign({id:uid(),estado:'pendiente',creado:Date.now()},d));
       await guardar();cerrar();render(false);toast((d.prodId||d.recetaId)?'Pedido guardado · stock reservado':'Pedido guardado')};
     const setE=async(e)=>{Object.assign(p,leer(),{estado:e});await guardar();render(false)};
     const venta=()=>{const pre={desc:p.detalle,unit:p.total,nota:p.cliente};cerrar();setTimeout(()=>p.sec==='ramos'?formRamo(pre):formRopa('salida',null,pre),260)};
+    if($('#eComp'))$('#eComp').onclick=()=>formComprobante(p);
     if($('#eListo'))$('#eListo').onclick=async()=>{await setE('listo');cerrar();toast('Marcado como listo')};
     if($('#ePend'))$('#ePend').onclick=async()=>{await setE('pendiente');cerrar();toast('Volvió a pendiente')};
-    if($('#eEnt'))$('#eEnt').onclick=async()=>{await setE('entregado');if(!p.movId&&await ventaDePedido(p)){cerrar();render(false);toast('Entregado ✓ Venta registrada y stock descontado');return}abrir(`<h2>¡Pedido entregado! 🌸</h2><p class="muted">¿Quieres registrar la venta ahora? Así queda en tus informes y se descuenta el stock.</p><button class="btn pri" id="vSi" style="margin-bottom:10px">Registrar venta</button><button class="btn sec" id="vNo">Ahora no</button>`,()=>{$('#vSi').onclick=venta;$('#vNo').onclick=cerrar})};
+    if($('#eEnt'))$('#eEnt').onclick=async()=>{await setE('entregado');if(!p.movId&&await ventaDePedido(p)){render(false);formComprobante(p,'✓ Entregado · venta registrada y stock descontado');return}abrir(`<h2>¡Pedido entregado! 🧸</h2><p class="muted">¿Quieres registrar la venta ahora? Así queda en tus informes y se descuenta el stock.</p><button class="btn pri" id="vSi" style="margin-bottom:10px">Registrar venta</button><button class="btn wa" id="vWa" style="margin-bottom:10px">📦 Avisar envío por WhatsApp</button><button class="btn sec" id="vNo">Ahora no</button>`,()=>{$('#vSi').onclick=venta;$('#vNo').onclick=cerrar;$('#vWa').onclick=()=>formComprobante(p)})};
     if($('#eVenta'))$('#eVenta').onclick=async()=>{if(await ventaDePedido(p)){cerrar();render(false);toast('Venta registrada y stock descontado');return}venta()};
     if($('#qdel'))$('#qdel').onclick=()=>confirmar('¿Eliminar pedido?',p.cliente+' · '+p.detalle,'Eliminar',async()=>{S.pedidos=S.pedidos.filter(x=>x.id!==id);await guardar();render(false)});
   });
