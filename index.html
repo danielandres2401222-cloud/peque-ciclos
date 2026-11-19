@@ -96,7 +96,7 @@ nav.tabs button.on{color:var(--rosa)}
 .scrim.on{opacity:1;pointer-events:auto}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;background:var(--bg);border-radius:22px 22px 0 0;max-height:92vh;overflow:auto;transform:translateY(105%);transition:transform .25s ease;padding:8px 18px calc(18px + var(--bot));max-width:640px;margin:0 auto;-webkit-overflow-scrolling:touch}
 .sheet.on{transform:none}
-.sheet .grab{width:40px;height:5px;border-radius:9px;background:#f4bfd2;margin:2px auto 10px;position:relative}
+.sheet .grab{width:40px;height:5px;border-radius:9px;background:var(--rosa-2);margin:2px auto 10px;position:relative}
 .sheet .grab::before{content:"";position:absolute;left:-60px;right:-60px;top:-14px;bottom:-12px}
 .sheet.drag{transition:none}
 .sheet h2{margin:0 0 12px;font-size:21px}
@@ -110,8 +110,14 @@ nav.tabs button.on{color:var(--rosa)}
 .box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:0 0 12px}
 .total{display:flex;justify-content:space-between;align-items:center;background:var(--card);border-radius:14px;padding:12px 14px;margin:4px 0 14px;font-weight:650}
 .total b{font-size:20px;font-variant-numeric:tabular-nums}
-.uline{display:grid;grid-template-columns:1fr 92px 34px;gap:8px;align-items:center;margin-bottom:8px}
-.uline select,.uline input{border:1px solid var(--line);background:var(--field);border-radius:10px;padding:10px;font-size:16px;width:100%;-webkit-appearance:none}
+.uline{display:grid;grid-template-columns:1fr 34px;gap:6px 8px;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px dashed var(--line)}
+.uline .q{grid-column:1/-1;display:flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)}
+.uline .q input{flex:1;min-width:0}
+.uline .q .qx{font-weight:700}
+.uline .qcost{grid-column:1/-1;font-size:12.5px;color:var(--muted);margin-top:-2px}
+.areabox{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end}
+.areabox .x2{padding-bottom:12px;font-weight:700;color:var(--muted)}
+.uline select,.uline input{color:var(--ink);border:1px solid var(--line);background:var(--field);border-radius:10px;padding:10px;font-size:16px;width:100%;-webkit-appearance:none}
 .x{border:0;background:var(--rosa-3);border-radius:10px;height:40px;color:var(--muted);font-size:18px}
 .warn{background:var(--rojo-2);color:var(--rojo);border-radius:12px;padding:10px 12px;font-size:14px;margin:0 0 12px}
 .toast{position:fixed;left:50%;bottom:calc(90px + var(--bot));transform:translateX(-50%) translateY(20px);background:var(--rosa-ink);color:#fff;padding:10px 16px;border-radius:99px;font-size:14px;font-weight:600;opacity:0;transition:.25s;z-index:30;pointer-events:none;white-space:nowrap}
@@ -937,7 +943,27 @@ $('#scrim').onclick=cerrar;
   sh.addEventListener('touchend',fin);sh.addEventListener('touchcancel',fin);
 })();
 function confirmar(t,msg,btn,fn){abrir(`<h2>${esc(t)}</h2><p class="muted">${esc(msg)}</p><button class="btn dan" id="cOk" style="margin-bottom:10px">${esc(btn)}</button><button class="btn sec" id="cNo">Cancelar</button>`,()=>{$('#cOk').onclick=async()=>{cerrar();await fn()};$('#cNo').onclick=cerrar})}
-const unidades=['unidades','metros','paquetes','rollos','pliegos','gramos','cajas'];
+const unidades=['unidades','m²','metros','paquetes','rollos','pliegos','gramos','cajas'];
+const uLbl=u=>u==='m²'?'m² · tela (ancho × largo)':u;
+const esArea=id=>((mat(id)||{}).unidad)==='m²';
+const nfm=v=>nf(Math.round(v*100)/100);
+/* Línea de material (modelos y ventas): si el material es tela en m², pide ancho × largo */
+function lineaMat(cont,ms,u,onch){
+  u=u||{};const d=document.createElement('div');d.className='uline';
+  d.innerHTML=`<select>${ms.map(x=>`<option value="${x.id}" ${x.id===u.matId?'selected':''}>${esc(x.nombre)}</option>`).join('')}</select><button class="x" aria-label="Quitar">×</button><div class="q"></div><div class="qcost"></div>`;
+  const sel=d.querySelector('select');
+  const pinta=()=>{const id=sel.value,area=esArea(id),q=d.querySelector('.q');
+    q.innerHTML=area?`<input class="qa" inputmode="decimal" placeholder="Ancho (m)" value="${u.ancho??''}"><span class="qx">×</span><input class="ql" inputmode="decimal" placeholder="Largo (m)" value="${u.largo??''}">`
+      :`<input class="qc" inputmode="decimal" placeholder="Cantidad" value="${u.cant??''}"><span>${esc(((mat(id)||{}).unidad)||'')}</span>`;
+    q.querySelectorAll('input').forEach(i=>i.oninput=()=>{costo();onch()});costo()};
+  const costo=()=>{const r=leerLinea(d);d.querySelector('.qcost').textContent=r.cant>0?(esArea(r.matId)?`= ${nfm(r.cant)} m² · `:'')+`costo ${$$(costoMat(r.matId)*r.cant)}`:''};
+  sel.onchange=()=>{u={matId:sel.value};pinta();onch()};
+  d.querySelector('.x').onclick=()=>{d.remove();onch()};
+  cont.appendChild(d);pinta();return d}
+function leerLinea(d){const id=d.querySelector('select').value;
+  if(esArea(id)){const a=num((d.querySelector('.qa')||{}).value||''),l=num((d.querySelector('.ql')||{}).value||'');return{matId:id,cant:a*l,ancho:a,largo:l}}
+  return{matId:id,cant:num((d.querySelector('.qc')||{}).value||'')}}
+const leerLineas=sel=>[...document.querySelectorAll(sel+' .uline')].map(leerLinea).filter(u=>u.cant>0);
 
 /* ---- Ropa ---- */
 function formRopa(tipo,preId,pre){
@@ -1014,7 +1040,7 @@ const VOZ=(()=>{
     return out.join('')}
   const numTxt=s=>{s=String(s);if(/^\d{1,3}(\.\d{3})+$/.test(s))return+s.replace(/\./g,'');if(/^\d{1,3}(,\d{3})+$/.test(s))return+s.replace(/,/g,'');return+s.replace(',','.')};
   const N='(\\d{1,3}(?:[.,]\\d{3})+|\\d+(?:[.,]\\d+)?)';
-  const UNI={metro:'metros',metros:'metros',mt:'metros',mts:'metros',m:'metros',rollo:'rollos',rollos:'rollos',paquete:'paquetes',paquetes:'paquetes',paquetito:'paquetes',paquetitos:'paquetes',bolsa:'paquetes',bolsas:'paquetes',caja:'cajas',cajas:'cajas',pliego:'pliegos',pliegos:'pliegos',hoja:'pliegos',hojas:'pliegos',gramo:'gramos',gramos:'gramos',gr:'gramos',grs:'gramos',kilo:'gramos',kilos:'gramos',unidad:'unidades',unidades:'unidades'};
+  const UNI={mcuadx:'m²',metro:'metros',metros:'metros',mt:'metros',mts:'metros',m:'metros',rollo:'rollos',rollos:'rollos',paquete:'paquetes',paquetes:'paquetes',paquetito:'paquetes',paquetitos:'paquetes',bolsa:'paquetes',bolsas:'paquetes',caja:'cajas',cajas:'cajas',pliego:'pliegos',pliegos:'pliegos',hoja:'pliegos',hojas:'pliegos',gramo:'gramos',gramos:'gramos',gr:'gramos',grs:'gramos',kilo:'gramos',kilos:'gramos',unidad:'unidades',unidades:'unidades'};
   const RELLENO=/^(?:(?:hola|oye|hoy|ayer|bueno|ya|ok|okay|y|e|o|tambien|ademas|despues|luego|me|nos|se|llegaron|llego|compre|compramos|compro|agregue|agregamos|agrega|agregar|anota|anotar|anade|suma|sumale|pon|ponle|traje|trajimos|ingresa|ingrese|ingresar|unas?|unos?|las|los|el|la|otras?|otros?|mas|de|pues|eh|em|este)\b\s*)+/;
   function prep(texto){
     let t=' '+sa(texto).replace(/[¿?¡!"]/g,' ')+' ';
@@ -1026,6 +1052,9 @@ const VOZ=(()=>{
     // lucas: "2 lucas y media" = 2500, "luca y media" = 1500, "una luca" = 1000
     t=t.replace(/\b(\d+(?:[.,]\d+)?)?\s*lucas?(\s+y\s+media)?\b/g,(x,d,m)=>' '+String(Math.round(((d?numTxt(d):1)+(m?0.5:0))*1000))+' ');
     t=t.replace(/\b(\d+)\s+(metros?|kilos?)\s+y\s+medio\b/g,(x,d,u)=>(+d+0.5)+' '+u).replace(/\bmedio\s+(metro|kilo)\b/g,'0.5 $1s');
+    // tela: "1,5 por 2 metros" / "1.5 x 2,7 m" -> m²
+    t=t.replace(/(\d+(?:[.,]\d+)?)\s*(?:x|por)\s*(\d+(?:[.,]\d+)?)\s*(?:metros?|mts?|m)\b/g,(x,a,b)=>String(Math.round(numTxt(a)*numTxt(b)*1000)/1000)+' mcuadx');
+    t=t.replace(/(\d+(?:[.,]\d+)?)\s*(?:metros?\s+cuadrados?|m2)\b/g,'$1 mcuadx');
     t=t.replace(/(\d+(?:[.,]\d+)?)\s*(kilos?)\b/g,(x,d)=>String(numTxt(d)*1000)+' gramos');
     t=t.replace(/\b(\d+)\s*(?:con|coma)\s*(\d)\b/g,'$1.$2');
     return t}
@@ -1179,43 +1208,63 @@ function formVoz(){
   });
 }
 
-function formMatIngreso(preId){
+function formMatIngreso(preId,editId){
+  const ed=editId?S.movs.find(m=>m.id===editId):null;
   const ms=[...S.materiales].sort((a,b)=>a.nombre.localeCompare(b.nombre));
-  abrir(`<h2>Ingreso de material</h2>
-  <div class="f"><label>Material</label><select id="mp"><option value="__n">+ Material nuevo…</option>${ms.map(x=>`<option value="${x.id}">${esc(x.nombre)} (${nf(stockMat(x.id))} ${esc(x.unidad)})</option>`).join('')}</select></div>
+  abrir(`<h2>${ed?'Editar compra':'Ingreso de material'}</h2>
+  <div class="f"><label>Material</label><select id="mp">${ed?'':'<option value="__n">+ Material nuevo…</option>'}${ms.map(x=>`<option value="${x.id}">${esc(x.nombre)} (${nfm(stockMat(x.id))} ${esc(x.unidad)})</option>`).join('')}</select></div>
   <div id="nuevoBox" class="box">
     <div class="f"><label>Nombre del material</label><input id="mn" placeholder="Ej: Tela polar estrellas"></div>
-    <div class="f"><label>Se cuenta en</label><select id="mu">${unidades.map(u=>`<option>${u}</option>`).join('')}</select></div>
+    <div class="f"><label>Se cuenta en</label><select id="mu">${unidades.map(u=>`<option value="${u}">${uLbl(u)}</option>`).join('')}</select></div>
   </div>
-  <div class="f2"><div class="f"><label>Cantidad comprada</label><input id="mc" inputmode="decimal" placeholder="Ej: 50"></div><div class="f"><label>Total pagado</label><input id="mt" inputmode="numeric" placeholder="$"></div></div>
+  <div id="cantBox" class="f"><label>Cantidad comprada</label><input id="mc" inputmode="decimal" placeholder="Ej: 50"></div>
+  <div id="areaBox" hidden>
+    <div class="areabox"><div class="f"><label>Ancho (m)</label><input id="ma" inputmode="decimal" placeholder="Ej: 1,5"></div><span class="x2">×</span><div class="f"><label>Largo (m)</label><input id="ml" inputmode="decimal" placeholder="Ej: 2,7"></div></div>
+    <div class="f"><label>Piezas iguales</label><input id="mpz" inputmode="numeric" value="1"></div>
+    <div class="hint" id="m2txt" style="margin:-4px 0 12px">= 0 m²</div>
+  </div>
+  <div class="f"><label>Total pagado</label><input id="mt" inputmode="numeric" placeholder="$"></div>
   <div class="f"><label>Fecha</label><input type="date" id="mf" value="${hoy()}"></div>
   <div class="f"><label>Nota (opcional)</label><input id="mno" placeholder="Ej: proveedor"></div>
   <div class="total"><span>Costo por <span id="mus">unidad</span></span><b id="mcu">$0</b></div>
-  <button class="btn pri" id="mok">Guardar ingreso</button>`,()=>{
-    const sel=$('#mp');if(preId)sel.value=preId;else if(ms.length)sel.value=ms[0].id;
-    const sync=()=>{const nuevo=sel.value==='__n';$('#nuevoBox').hidden=!nuevo;const u=nuevo?$('#mu').value:(mat(sel.value)||{}).unidad;$('#mus').textContent=unidadSing(u);const c=num($('#mc').value);$('#mcu').textContent=$$(c?num($('#mt').value)/c:0)};
-    sel.onchange=sync;$('#mu').onchange=sync;$('#mc').oninput=sync;$('#mt').oninput=sync;sync();
+  <button class="btn pri" id="mok" style="margin-bottom:10px">${ed?'Guardar cambios':'Guardar ingreso'}</button>
+  ${ed?'<button class="btn dan" id="mdl">Eliminar compra</button>':''}`,()=>{
+    const sel=$('#mp');
+    if(ed){sel.value=ed.itemId;$('#mt').value=ed.total;$('#mf').value=ed.fecha;$('#mno').value=ed.nota||'';
+      if(ed.ancho){$('#ma').value=nfm(ed.ancho);$('#ml').value=nfm(ed.largo);$('#mpz').value=ed.piezas||1}else $('#mc').value=nfm(ed.cant)}
+    else if(preId)sel.value=preId;else if(ms.length)sel.value=ms[0].id;
+    const unidad=()=>sel.value==='__n'?$('#mu').value:(mat(sel.value)||{}).unidad;
+    const cant=()=>unidad()==='m²'?num($('#ma').value)*num($('#ml').value)*Math.max(1,num($('#mpz').value)||1):num($('#mc').value);
+    const sync=()=>{const nuevo=sel.value==='__n';$('#nuevoBox').hidden=!nuevo;const u=unidad(),area=u==='m²';
+      $('#areaBox').hidden=!area;$('#cantBox').hidden=area;$('#mus').textContent=unidadSing(u);
+      const c=cant();$('#m2txt').textContent=`= ${nfm(c)} m² de tela`;$('#mcu').textContent=$$(c?num($('#mt').value)/c:0)};
+    sel.onchange=sync;$('#mu').onchange=sync;['mc','mt','ma','ml','mpz'].forEach(k=>$('#'+k).oninput=sync);sync();
+    const dl=$('#mdl');if(dl)dl.onclick=()=>confirmar('¿Eliminar compra?','El stock se recalcula solo.','Eliminar',async()=>{S.movs=S.movs.filter(x=>x.id!==editId);await guardar();render();toast('Eliminada')});
     $('#mok').onclick=async()=>{
-      let id=sel.value;const cant=num($('#mc').value),total=Math.round(num($('#mt').value));
+      let id=sel.value;const c=cant(),total=Math.round(num($('#mt').value)),area=unidad()==='m²';
       if(id==='__n'){const n=$('#mn').value.trim();if(!n)return toast('Escribe el nombre del material');const ya=matPorNombre(n);if(ya)id=ya.id;else{const x={id:uid(),nombre:n,unidad:$('#mu').value};S.materiales.push(x);id=x.id}}
-      if(cant<=0)return toast('La cantidad debe ser mayor a 0');
-      S.movs.push({id:uid(),sec:'ramos',tipo:'ingreso',fecha:$('#mf').value||hoy(),itemId:id,cant,unit:total/cant,total,nota:$('#mno').value.trim(),creado:Date.now()});
-      await guardar();cerrar();render();toast('Ingreso guardado');
+      if(c<=0)return toast(area?'Escribe el ancho y el largo':'La cantidad debe ser mayor a 0');
+      const d={fecha:$('#mf').value||hoy(),itemId:id,cant:c,unit:total/c,total,nota:$('#mno').value.trim()};
+      if(area)Object.assign(d,{ancho:num($('#ma').value),largo:num($('#ml').value),piezas:Math.max(1,num($('#mpz').value)||1)});else Object.assign(d,{ancho:undefined,largo:undefined,piezas:undefined});
+      if(ed)Object.assign(ed,d);else S.movs.push({id:uid(),sec:'ramos',tipo:'ingreso',creado:Date.now(),...d});
+      await guardar();cerrar();render();toast(ed?'Compra actualizada':'Ingreso guardado');
     };
   });
 }
 function formMaterial(id){
-  const x=id?mat(id):{nombre:'',unidad:'unidades'};const usado=id&&S.movs.some(m=>m.itemId===id||(m.usados||[]).some(u=>u.matId===id));
+  const x=id?mat(id):{nombre:'',unidad:'unidades'};const compras=id?S.movs.filter(m=>m.sec==='ramos'&&m.tipo==='ingreso'&&m.itemId===id).sort((a,b)=>(b.fecha+b.creado).localeCompare(a.fecha+a.creado)):[];const usado=id&&S.movs.some(m=>m.itemId===id||(m.usados||[]).some(u=>u.matId===id));
   abrir(`<h2>${id?'Material':'Nuevo material'}</h2>
   ${id?`<div class="box"><div class="kv"><span>Stock</span><span>${nf(stockMat(id))} ${esc(x.unidad)}</span></div><div class="kv"><span>Costo promedio</span><span>${$$(costoMat(id))} / ${esc(unidadSing(x.unidad))}</span></div></div>
   <button class="btn in" id="xIn" style="width:100%;margin-bottom:12px">${ICON.in} Registrar compra de este material</button>`:''}
   <div class="f"><label>Nombre</label><input id="xn" value="${esc(x.nombre)}"></div>
-  <div class="f"><label>Se cuenta en</label><select id="xu">${unidades.map(u=>`<option ${u===x.unidad?'selected':''}>${u}</option>`).join('')}</select></div>
+  <div class="f"><label>Se cuenta en</label><select id="xu">${unidades.map(u=>`<option value="${u}" ${u===x.unidad?'selected':''}>${uLbl(u)}</option>`).join('')}</select></div>
   <button class="btn pri" id="xok" style="margin-bottom:10px">Guardar</button>
+  ${id&&compras.length?`<h2 style="margin:16px 0 8px;font-size:17px">Compras (toca para editar)</h2><div class="list" style="margin-bottom:12px">${compras.map(m=>`<div class="row" data-ced="${m.id}"><div class="main"><div class="t">${m.ancho?`${nfm(m.ancho)} × ${nfm(m.largo)} m${m.piezas>1?' × '+m.piezas:''} = ${nfm(m.cant)} m²`:`${nfm(m.cant)} ${esc(x.unidad)}`}</div><div class="s">${fFecha(m.fecha)} · ${$$(m.unit)} por ${esc(unidadSing(x.unidad))}</div></div><div class="amt">${$$(m.total)}</div></div>`).join('')}</div>`:''}
   ${id?`<button class="btn dan" id="xdel">Eliminar material</button>`:''}`,()=>{
     if(id)$('#xIn').onclick=()=>formMatIngreso(id);
+    document.querySelectorAll('[data-ced]').forEach(el=>el.onclick=()=>formMatIngreso(null,el.dataset.ced));
     $('#xok').onclick=async()=>{const n=$('#xn').value.trim();if(!n)return toast('Escribe el nombre');const ya=matPorNombre(n);if(ya&&ya.id!==id)return toast('Ya tienes ese material: '+ya.nombre);
-      if(id){x.nombre=n;x.unidad=$('#xu').value}else S.materiales.push({id:uid(),nombre:n,unidad:$('#xu').value});
+      if(id){if(x.unidad!==$('#xu').value&&compras.length)toast('Ojo: las compras anteriores quedan con la unidad antigua');x.nombre=n;x.unidad=$('#xu').value}else S.materiales.push({id:uid(),nombre:n,unidad:$('#xu').value});
       await guardar();cerrar();render();toast('Guardado')};
     const d=$('#xdel');if(d)d.onclick=()=>{if(usado)return toast('Tiene movimientos: elimínalos primero');confirmar('¿Eliminar material?',x.nombre,'Eliminar',async()=>{S.materiales=S.materiales.filter(y=>y.id!==id);await guardar();render()})};
   });
@@ -1241,23 +1290,23 @@ function formRamo(pre){
     <div class="kv"><span><b>Ganancia</b></span><span id="rgt"><b>$0</b></span></div>
   </div>
   <button class="btn pri" id="rok">Guardar venta</button>`,()=>{
-    const linea=(matId,cant)=>{const d=document.createElement('div');d.className='uline';d.innerHTML=`<select>${ms.map(x=>`<option value="${x.id}" ${x.id===matId?'selected':''}>${esc(x.nombre)}</option>`).join('')}</select><input inputmode="decimal" placeholder="Cant." value="${cant??''}"><button class="x" aria-label="Quitar">×</button>`;d.querySelector('.x').onclick=()=>{d.remove();sync()};d.querySelector('select').onchange=sync;d.querySelector('input').oninput=sync;$('#rl').appendChild(d)};
-    const leer=()=>[...document.querySelectorAll('#rl .uline')].map(d=>({matId:d.querySelector('select').value,cant:num(d.querySelector('input').value)})).filter(u=>u.cant>0);
+    const linea=u=>lineaMat($('#rl'),ms,u,()=>sync());
+    const leer=()=>leerLineas('#rl');
     const sync=()=>{const n=Math.max(num($('#rc').value),0),pv=num($('#rp').value)*n;let c=0;const falta=[];
       for(const u of leer()){c+=costoMat(u.matId)*u.cant*n;if(u.cant*n>stockMat(u.matId))falta.push((mat(u.matId)||{}).nombre)}
       $('#rvt').textContent=$$(pv);$('#rct').textContent=$$(c);const g=pv-c;$('#rgt').innerHTML=`<b class="${g>=0?'pos':'neg'}">${$$(g)}</b>`;
       $('#rw').innerHTML=falta.length?`<div class="warn">No alcanza el stock de: ${esc(falta.join(', '))}. Puedes guardar igual.</div>`:''};
-    const ra=$('#radd');if(ra)ra.onclick=()=>{linea(ms[0].id,'');sync()};
-    if(ms.length)linea(ms[0].id,'');
-    $('#rd').onchange=()=>{const prev=[...S.movs].reverse().find(m=>m.sec==='ramos'&&m.tipo==='salida'&&m.desc===$('#rd').value.trim());if(prev){$('#rl').innerHTML='';(prev.usados||[]).forEach(u=>{if(mat(u.matId))linea(u.matId,u.cantRamo??u.cant/(prev.cant||1))});if(!$('#rp').value)$('#rp').value=prev.unit||'';sync()}};
+    const ra=$('#radd');if(ra)ra.onclick=()=>{linea({matId:ms[0].id});sync()};
+    if(ms.length)linea({matId:ms[0].id});
+    $('#rd').onchange=()=>{const prev=[...S.movs].reverse().find(m=>m.sec==='ramos'&&m.tipo==='salida'&&m.desc===$('#rd').value.trim());if(prev){$('#rl').innerHTML='';(prev.usados||[]).forEach(u=>{if(mat(u.matId))linea({matId:u.matId,cant:u.cantRamo??u.cant/(prev.cant||1),ancho:u.ancho,largo:u.largo})});if(!$('#rp').value)$('#rp').value=prev.unit||'';sync()}};
     $('#rc').oninput=sync;$('#rp').oninput=sync;sync();
-    const rr=$('#rrec');if(rr)rr.onchange=()=>{const r=receta(rr.value);if(!r)return;$('#rd').value=r.nombre;$('#rp').value=r.precio||'';$('#rl').innerHTML='';r.mats.forEach(u=>{if(mat(u.matId))linea(u.matId,u.cant)});sync()};
+    const rr=$('#rrec');if(rr)rr.onchange=()=>{const r=receta(rr.value);if(!r)return;$('#rd').value=r.nombre;$('#rp').value=r.precio||'';$('#rl').innerHTML='';r.mats.forEach(u=>{if(mat(u.matId))linea(u)});sync()};
     if(pre&&pre.recetaId&&rr){rr.value=pre.recetaId;rr.onchange()}
     if(pre){$('#rd').value=pre.desc||'';$('#rd').onchange();if(pre.unit)$('#rp').value=pre.unit;if(pre.nota)$('#rno').value=pre.nota;sync()}
     $('#rok').onclick=async()=>{
       const desc=$('#rd').value.trim()||'Confección';const n=num($('#rc').value),unit=num($('#rp').value);
       if(n<=0)return toast('La cantidad debe ser mayor a 0');
-      const usados=leer().map(u=>({matId:u.matId,cantRamo:u.cant,cant:u.cant*n,costo:Math.round(costoMat(u.matId)*u.cant*n)}));
+      const usados=leer().map(u=>({matId:u.matId,cantRamo:u.cant,cant:u.cant*n,costo:Math.round(costoMat(u.matId)*u.cant*n),...(u.ancho?{ancho:u.ancho,largo:u.largo}:{})}));
       const costo=usados.reduce((s,u)=>s+u.costo,0);
       S.movs.push({id:uid(),sec:'ramos',tipo:'salida',fecha:$('#rf').value||hoy(),itemId:null,desc,cant:n,unit,total:Math.round(n*unit),costo,usados,nota:$('#rno').value.trim(),creado:Date.now()});
       await guardar();cerrar();render();toast('Venta guardada');
@@ -1273,16 +1322,17 @@ function detalleMov(id){
   <div class="box">
     <div class="kv"><span>${m.sec==='ramos'&&!ing?'Confección':ing&&m.sec==='ramos'?'Material':'Producto'}</span><span>${esc(nombreMov(m))}</span></div>
     <div class="kv"><span>Fecha</span><span>${fFecha(m.fecha)}</span></div>
-    <div class="kv"><span>Cantidad</span><span>${nf(m.cant)} ${esc(u)}</span></div>
+    <div class="kv"><span>Cantidad</span><span>${m.ancho?`${nfm(m.ancho)} × ${nfm(m.largo)} m${m.piezas>1?' × '+m.piezas:''} = `:''}${nfm(m.cant)} ${esc(u)}</span></div>
     <div class="kv"><span>${ing?'Costo unitario':'Precio unitario'}</span><span>${$$(m.unit)}</span></div>
     <div class="kv"><span>Total</span><span class="${ing?'neg':'pos'}">${$$(m.total)}</span></div>
     ${!ing?`<div class="kv"><span>Costo</span><span>${$$(m.costo)}</span></div><div class="kv"><span>Ganancia</span><span class="${m.total-m.costo>=0?'pos':'neg'}">${$$(m.total-(m.costo||0))}</span></div>`:''}
     ${m.nota?`<div class="kv"><span>Nota</span><span>${esc(m.nota)}</span></div>`:''}
   </div>
-  ${m.usados&&m.usados.length?`<div class="box"><div class="small muted" style="font-weight:650;margin-bottom:4px">Materiales usados</div>${m.usados.map(x=>`<div class="kv"><span>${esc((mat(x.matId)||{}).nombre||'(eliminado)')}</span><span>${nf(x.cant)} ${esc((mat(x.matId)||{}).unidad||'')} · ${$$(x.costo)}</span></div>`).join('')}</div>`:''}
+  ${m.usados&&m.usados.length?`<div class="box"><div class="small muted" style="font-weight:650;margin-bottom:4px">Materiales usados</div>${m.usados.map(x=>`<div class="kv"><span>${esc((mat(x.matId)||{}).nombre||'(eliminado)')}</span><span>${x.ancho?`${nfm(x.ancho)}×${nfm(x.largo)} m · `:''}${nfm(x.cant)} ${esc((mat(x.matId)||{}).unidad||'')} · ${$$(x.costo)}</span></div>`).join('')}</div>`:''}
+  ${ing&&m.sec==='ramos'?'<button class="btn in" id="medit" style="width:100%;margin-bottom:10px">Editar compra</button>':''}
   <button class="btn dan" id="mdel" style="margin-bottom:10px">Eliminar movimiento</button>
   <button class="btn sec" id="mcl">Cerrar</button>`,()=>{
-    $('#mcl').onclick=cerrar;
+    $('#mcl').onclick=cerrar;const me=$('#medit');if(me)me.onclick=()=>formMatIngreso(null,id);
     $('#mdel').onclick=()=>confirmar('¿Eliminar movimiento?','El stock y los informes se recalculan automáticamente.','Eliminar',async()=>{S.movs=S.movs.filter(x=>x.id!==id);await guardar();render();toast('Eliminado')});
   });
 }
@@ -1332,11 +1382,11 @@ function formReceta(id){
   <div class="box"><div class="kv"><span>Costo de materiales</span><span id="eco">$0</span></div><div class="kv"><span><b>Ganancia por unidad</b></span><span id="ega"><b>$0</b></span></div></div>
   <button class="btn pri" id="eok" style="margin-bottom:10px">Guardar modelo</button>
   ${id?`<button class="btn dan" id="edel">Eliminar modelo</button>`:''}`,()=>{
-    const linea=(matId,cant)=>{const d=document.createElement('div');d.className='uline';d.innerHTML=`<select>${ms.map(x=>`<option value="${x.id}" ${x.id===matId?'selected':''}>${esc(x.nombre)}</option>`).join('')}</select><input inputmode="decimal" placeholder="Cant." value="${cant??''}"><button class="x" aria-label="Quitar">×</button>`;d.querySelector('.x').onclick=()=>{d.remove();sy()};d.querySelector('select').onchange=sy;d.querySelector('input').oninput=sy;$('#el').appendChild(d)};
-    const leer=()=>[...document.querySelectorAll('#el .uline')].map(d=>({matId:d.querySelector('select').value,cant:num(d.querySelector('input').value)})).filter(u=>u.cant>0);
+    const linea=u=>lineaMat($('#el'),ms,u,()=>sy());
+    const leer=()=>leerLineas('#el');
     const sy=()=>{const c=leer().reduce((s,u)=>s+costoMat(u.matId)*u.cant,0),g=num($('#ep').value)-c;$('#eco').textContent=$$(c);$('#ega').innerHTML=`<b class="${g>=0?'pos':'neg'}">${$$(g)}</b>`};
-    (r.mats||[]).forEach(u=>{if(mat(u.matId))linea(u.matId,u.cant)});if(!r.mats.length&&ms.length)linea(ms[0].id,'');
-    const ad=$('#eadd');if(ad)ad.onclick=()=>{linea(ms[0].id,'');sy()};$('#ep').oninput=sy;sy();
+    (r.mats||[]).forEach(u=>{if(mat(u.matId))linea(u)});if(!r.mats.length&&ms.length)linea({matId:ms[0].id});
+    const ad=$('#eadd');if(ad)ad.onclick=()=>{linea({matId:ms[0].id});sy()};$('#ep').oninput=sy;sy();
     $('#eok').onclick=async()=>{const n=$('#ec').value.trim();if(!n)return toast('Escribe el nombre del modelo');
       const d={nombre:n,precio:num($('#ep').value),mats:leer()};if(!S.recetas)S.recetas=[];
       if(id)Object.assign(r,d);else S.recetas.push(Object.assign({id:uid()},d));await guardar();cerrar();render(false);toast('Modelo guardado')};
