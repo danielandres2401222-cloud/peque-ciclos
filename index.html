@@ -119,6 +119,7 @@ nav.tabs button.on{color:var(--rosa)}
 .envio summary{font-weight:650;cursor:pointer;color:var(--rosa-ink);padding:2px 0;list-style:none}.envio summary::-webkit-details-marker{display:none}
 .envio summary::after{content:'▾';float:right;color:var(--muted)}.envio[open] summary{margin-bottom:10px}.envio[open] summary::after{content:'▴'}
 @keyframes rell{0%{background:var(--azul-2)}100%{background:var(--field)}}input.rell{animation:rell 1.6s ease}
+.row.inact{opacity:.6}
 .tline{display:grid;grid-template-columns:1fr 70px auto 34px;gap:6px;align-items:center;margin-bottom:8px}
 .tline select,.tline input{border:1px solid var(--line);background:var(--field);border-radius:10px;padding:9px;font-size:15px;width:100%;color:var(--ink);-webkit-appearance:none;min-width:0}
 .tline .tu{font-size:12px;color:var(--muted);white-space:nowrap}
@@ -715,7 +716,13 @@ function nombreMov(m){
 const CFG=()=>Object.assign({valorHora:0,margen:60,iva:false,ivaPct:19},S.config);
 const PAGO={hora:'Por hora',pieza:'Por pieza',mes:'Sueldo mensual',socio:'Socio(a) · % de la ganancia'};
 const trab=id=>(S.equipo||[]).find(x=>x.id===id);
-const costoTrab=t=>{const w=trab(t.eqId);if(!w)return 0;return w.pago==='hora'?(num(t.cant)||0)*(w.valor||0):w.pago==='pieza'?(num(t.cant)||0)*(w.valor||0):0};
+const activo=w=>{const P=w.periodos;if(!P||!P.length)return true;return!P[P.length-1].hasta};
+const fISO=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+/* días activos de un trabajador entre d0 y d1 (incluidos); callback por día */
+function diasActivo(w,d0,d1,cb){const P=(w.periodos&&w.periodos.length)?w.periodos:[{desde:null,hasta:null}];let n=0;
+  const a=new Date(d0+'T00:00'),b=new Date(d1+'T00:00');for(let d=new Date(a);d<=b;d.setDate(d.getDate()+1)){const f=fISO(d);
+    if(P.some(x=>(!x.desde||f>=x.desde)&&(!x.hasta||f<=x.hasta))){n++;if(cb)cb(d)}}return n}
+const costoTrab=t=>{const w=trab(t.eqId);if(!w||!activo(w))return 0;return w.pago==='hora'?(num(t.cant)||0)*(w.valor||0):w.pago==='pieza'?(num(t.cant)||0)*(w.valor||0):0};
 const exCosto=ex=>{ex=ex||{};const c=CFG();return (num(ex.horas)||0)*(c.valorHora||0)+(num(ex.personal)||0)+(num(ex.otros)||0)+(ex.trab||[]).reduce((s,t)=>s+costoTrab(t),0)};
 const ivaDe=total=>{const c=CFG();return c.iva?Math.round(total*c.ivaPct/(100+c.ivaPct)):0};
 const sugerido=costo=>{const c=CFG();let v=costo*(1+(c.margen||0)/100);if(c.iva)v*=1+c.ivaPct/100;return Math.ceil(v/100)*100};
@@ -723,26 +730,26 @@ const sugerido=costo=>{const c=CFG();let v=costo*(1+(c.margen||0)/100);if(c.iva)
 function camposEx(ex){ex=ex||{};const c=CFG();return`<div class="exbox"><div class="exh">Otros costos por unidad</div>
   <div class="f2"><div class="f"><label>Tus horas de trabajo</label><input id="xh" inputmode="decimal" value="${ex.horas??''}" placeholder="Ej: 1,5"></div><div class="f"><label>Otro pago a personal</label><input id="xpe" inputmode="numeric" value="${ex.personal??''}" placeholder="$"></div></div>
   <div class="f"><label>Trabajo del equipo</label><div id="xtl"></div>
-    ${(S.equipo||[]).some(w=>w.pago==='hora'||w.pago==='pieza')?`<button class="btn ghost" id="xtadd" type="button">${ICON.plus} Agregar trabajador</button>`:`<div class="hint">Agrega a tus trabajadores en <b>Ajustes → Equipo</b> para sumar su pago aquí.</div>`}</div>
+    ${(S.equipo||[]).some(w=>(w.pago==='hora'||w.pago==='pieza')&&activo(w))?`<button class="btn ghost" id="xtadd" type="button">${ICON.plus} Agregar trabajador</button>`:`<div class="hint">Agrega a tus trabajadores en <b>Ajustes → Equipo</b> para sumar su pago aquí.</div>`}</div>
   <div class="f"><label>Otros (empaque, etiquetas, hilo…)</label><input id="xot" inputmode="numeric" value="${ex.otros??''}" placeholder="$"></div>
   ${c.valorHora?'':`<div class="hint" style="margin:-4px 0 6px">Para sumar la mano de obra, pon el <b>valor de tu hora</b> en Ajustes → Costos e IVA.</div>`}</div>`}
 const leerEx=()=>({horas:num($('#xh').value)||0,personal:num($('#xpe').value)||0,otros:num($('#xot').value)||0,
   trab:[...document.querySelectorAll('#xtl .tline')].map(d=>({eqId:d.querySelector('select').value,cant:num(d.querySelector('input').value)||0})).filter(t=>t.cant>0)});
 /* líneas de trabajadores en el formulario (por hora o por pieza) */
-function initTrab(ex,onch){const L=(S.equipo||[]).filter(w=>w.pago==='hora'||w.pago==='pieza');const box=$('#xtl');if(!box)return;
+function initTrab(ex,onch){const L=(S.equipo||[]).filter(w=>(w.pago==='hora'||w.pago==='pieza')&&activo(w));const box=$('#xtl');if(!box)return;
   const linea=t=>{const d=document.createElement('div');d.className='tline';
     d.innerHTML=`<select>${L.map(w=>`<option value="${w.id}" ${w.id===t.eqId?'selected':''}>${esc(w.nombre)} · ${esc(w.cargo||'')}</option>`).join('')}</select><input inputmode="decimal" value="${t.cant??''}"><span class="tu"></span><button class="x" type="button" aria-label="Quitar">×</button>`;
     const sel=d.querySelector('select'),inp=d.querySelector('input'),tu=d.querySelector('.tu');
     const upd=()=>{const w=trab(sel.value);inp.placeholder=w&&w.pago==='hora'?'Horas':'Piezas';tu.textContent=w?(w.pago==='hora'?'h':'pza')+' · '+$$(costoTrab({eqId:sel.value,cant:num(inp.value)||0})):'';onch()};
     sel.onchange=upd;inp.oninput=upd;d.querySelector('.x').onclick=()=>{d.remove();onch()};box.appendChild(d);upd()};
-  ((ex||{}).trab||[]).forEach(t=>{if(trab(t.eqId))linea(t)});
+  ((ex||{}).trab||[]).forEach(t=>{const w=trab(t.eqId);if(w&&activo(w))linea(t)});
   const ad=$('#xtadd');if(ad)ad.onclick=()=>{const w=L[0];linea({eqId:w.id,cant:w.pago==='pieza'?1:''})}}
 /* Desglose: base = costo de compra o de materiales */
 function desglose(base,ex,precio,baseLbl){const c=CFG();ex=ex||{};const mo=(num(ex.horas)||0)*(c.valorHora||0),pe=num(ex.personal)||0,ot=num(ex.otros)||0;
   const tr=(ex.trab||[]).reduce((s2,t)=>s2+costoTrab(t),0);const costo=base+mo+pe+ot+tr,iva=c.iva?precio*c.ivaPct/(100+c.ivaPct):0,gan=precio-iva-costo,mg=precio?gan/(precio-iva||1)*100:0;
   return`<div class="kv"><span>${baseLbl}</span><span>${$$(base)}</span></div>
   ${mo?`<div class="kv"><span>Mano de obra (${nf(num(ex.horas))} h × ${$$(c.valorHora)})</span><span>${$$(mo)}</span></div>`:''}
-  ${(ex.trab||[]).filter(t=>trab(t.eqId)).map(t=>{const w=trab(t.eqId);return`<div class="kv"><span>${esc(w.nombre)} · ${esc(w.cargo||'')} (${nf(t.cant)} ${w.pago==='hora'?'h':'pza'} × ${$$(w.valor)})</span><span>${$$(costoTrab(t))}</span></div>`}).join('')}
+  ${(ex.trab||[]).filter(t=>trab(t.eqId)&&activo(trab(t.eqId))).map(t=>{const w=trab(t.eqId);return`<div class="kv"><span>${esc(w.nombre)} · ${esc(w.cargo||'')} (${nf(t.cant)} ${w.pago==='hora'?'h':'pza'} × ${$$(w.valor)})</span><span>${$$(costoTrab(t))}</span></div>`}).join('')}
   ${pe?`<div class="kv"><span>Otro pago a personal</span><span>${$$(pe)}</span></div>`:''}${ot?`<div class="kv"><span>Otros</span><span>${$$(ot)}</span></div>`:''}
   <div class="kv"><span><b>Costo total</b></span><span><b>${$$(costo)}</b></span></div>
   ${precio?`<div class="kv"><span>Precio de venta</span><span>${$$(precio)}</span></div>${c.iva?`<div class="kv"><span>IVA ${c.ivaPct}% incluido</span><span class="neg">−${$$(iva)}</span></div>`:''}
@@ -752,6 +759,9 @@ function formTrabajador(id){
   const w=id?trab(id):{nombre:'',cargo:'',pago:'pieza',valor:''};if(!w)return;
   const pagos=(S.pagosEq||[]).filter(x=>x.eqId===id).sort((a,b)=>b.fecha.localeCompare(a.fecha));
   abrir(`<h2>${id?esc(w.nombre):'Nuevo trabajador o socio'}</h2>
+  <div class="f"><label>Estado</label><div class="seg" style="margin:0"><button type="button" data-wa="1" class="${activo(w)?'on':''}">✅ En curso</button><button type="button" data-wa="0" class="${activo(w)?'':'on'}">⏸ Inactivo</button></div>
+    ${id&&w.periodos&&w.periodos.length?`<div class="hint">${w.periodos.map(x=>(x.desde?'Desde '+fFecha(x.desde):'Desde el inicio')+(x.hasta?' hasta '+fFecha(x.hasta):' · hasta hoy')).join('<br>')}</div>`:''}
+    <div class="hint">Mientras está inactivo no se le suma pago en los costos ni en los informes.</div></div>
   <div class="f"><label>Nombre</label><input id="wn" value="${esc(w.nombre)}" placeholder="Ej: Carolina"></div>
   <div class="f"><label>Cargo</label><input id="wc" list="wcl" value="${esc(w.cargo||'')}" placeholder="Ej: Costurera"><datalist id="wcl">${['Costurera','Ayudante','Cortadora','Bordadora','Terminaciones y planchado','Repartidor(a)','Vendedora','Diseñadora','Socia','Socio'].map(x=>`<option>${x}</option>`).join('')}</datalist></div>
   <div class="f"><label>¿Cómo se le paga?</label><select id="wp">${Object.entries(PAGO).map(([k,v])=>`<option value="${k}" ${k===w.pago?'selected':''}>${v}</option>`).join('')}</select></div>
@@ -763,9 +773,15 @@ function formTrabajador(id){
     const sync=()=>{const k=$('#wp').value;$('#wvl').textContent={hora:'Valor por hora ($)',pieza:'Pago por pieza ($)',mes:'Sueldo mensual ($)',socio:'% de la ganancia que le toca'}[k];
       $('#wvh').textContent={hora:'Se suma al costo según las horas que trabaje en cada producto.',pieza:'Se suma al costo por cada pieza que haga.',mes:'Se descuenta de la ganancia cada mes en Informes.',socio:'En Informes ves cuánto le corresponde de la ganancia.'}[k]};
     $('#wp').onchange=sync;sync();
+    document.querySelectorAll('[data-wa]').forEach(b=>b.onclick=()=>document.querySelectorAll('[data-wa]').forEach(y=>y.classList.toggle('on',y===b)));
     $('#wok').onclick=async()=>{const n=$('#wn').value.trim();if(!n)return toast('Escribe el nombre');
       const d={nombre:n,cargo:$('#wc').value.trim(),pago:$('#wp').value,valor:num($('#wv').value)};
-      if(!S.equipo)S.equipo=[];if(id)Object.assign(w,d);else S.equipo.push({id:uid(),...d});await guardar();cerrar();render(false);toast('Guardado')};
+      const on=!!document.querySelector('[data-wa="1"].on');
+      if(!S.equipo)S.equipo=[];
+      if(id){Object.assign(w,d);if(!w.periodos||!w.periodos.length)w.periodos=[{desde:null,hasta:null}];const ult=w.periodos[w.periodos.length-1];
+        if(!on&&!ult.hasta)ult.hasta=fISO(new Date(Date.now()-864e5))<(ult.desde||'')?ult.desde:fISO(new Date(Date.now()-864e5));
+        if(on&&ult.hasta)w.periodos.push({desde:hoy(),hasta:null})}
+      else S.equipo.push({id:uid(),...d,periodos:on?[{desde:hoy(),hasta:null}]:[{desde:hoy(),hasta:hoy()}]});await guardar();cerrar();render(false);toast('Guardado')};
     if(id){$('#wpay').onclick=()=>formPagoEq(id);document.querySelectorAll('[data-pq]').forEach(el=>el.onclick=()=>formPagoEq(id,el.dataset.pq));
       $('#wdel').onclick=()=>confirmar('¿Eliminar a '+w.nombre+'?','Sus pagos registrados también se eliminan.','Eliminar',async()=>{S.equipo=S.equipo.filter(x=>x.id!==id);S.pagosEq=(S.pagosEq||[]).filter(x=>x.eqId!==id);await guardar();render(false)})}
   });
@@ -783,15 +799,19 @@ function formPagoEq(eqId,pid){const w=trab(eqId);if(!w)return;const x=pid?(S.pag
 /* Equipo en un período: sueldos fijos, pagos hechos y reparto entre socios */
 function equipoPeriodo(desde,hasta,ganancia){
   const E=S.equipo||[];if(!E.length)return null;
-  const d0=desde?new Date(desde+'T00:00'):null,d1=new Date((hasta||hoy())+'T00:00');
-  let meses=1;if(d0){meses=Math.max(1,(d1.getFullYear()-d0.getFullYear())*12+d1.getMonth()-d0.getMonth()+1)}else{const f=S.movs.map(m=>m.fecha).sort()[0];if(f){const a=new Date(f+'T00:00');meses=Math.max(1,(d1.getFullYear()-a.getFullYear())*12+d1.getMonth()-a.getMonth()+1)}}
-  const sueldos=E.filter(w=>w.pago==='mes').map(w=>({w,monto:Math.round((w.valor||0)*meses)}));
-  const totSueldos=sueldos.reduce((s,x)=>s+x.monto,0);
+  const h=(hasta&&hasta<hoy())?hasta:hoy();
+  let d=desde;if(!d){const f=[...S.movs.map(m=>m.fecha),...E.flatMap(w=>(w.periodos||[]).map(x=>x.desde).filter(Boolean))].sort()[0];d=f||hoy()}
+  const total=diasActivo({periodos:[{desde:null,hasta:null}]},d,h);
+  const sueldos=[],socios=[];
+  for(const w of E){
+    if(w.pago==='mes'){let m=0;const dias=diasActivo(w,d,h,dd=>{m+=(w.valor||0)/new Date(dd.getFullYear(),dd.getMonth()+1,0).getDate()});if(dias)sueldos.push({w,monto:Math.round(m),dias,parcial:dias<total})}
+    if(w.pago==='socio'){const dias=diasActivo(w,d,h);if(dias)socios.push({w,frac:dias/total,dias,parcial:dias<total})}}
+  const totSueldos=sueldos.reduce((s2,x)=>s2+x.monto,0);
   const pagos=(S.pagosEq||[]).filter(x=>(!desde||x.fecha>=desde)&&(!hasta||x.fecha<=hasta));
-  const totPagos=pagos.reduce((s,x)=>s+x.monto,0);
+  const totPagos=pagos.reduce((s2,x)=>s2+x.monto,0);
   const neta=ganancia-totSueldos;
-  const socios=E.filter(w=>w.pago==='socio').map(w=>({w,monto:Math.round(Math.max(0,neta)*(w.valor||0)/100)}));
-  return{meses,sueldos,totSueldos,pagos,totPagos,neta,socios}}
+  socios.forEach(x=>x.monto=Math.round(Math.max(0,neta)*(x.w.valor||0)/100*x.frac));
+  return{sueldos,totSueldos,pagos,totPagos,neta,socios}}
 function resumen(desde,hasta,sec){
   const r={ventas:0,compras:0,costo:0,iva:0,n:0,movs:[]};
   for(const m of S.movs){
@@ -949,9 +969,9 @@ function vInformes(){
     <p class="small muted" style="margin:10px 0 0">El <b>balance de caja</b> compara lo que entró con lo que salió en el período. La <b>ganancia de las ventas</b> resta a cada venta lo que costó ese producto o los materiales de esa confección.</p>
   </div>
   ${(()=>{const q=equipoPeriodo(a,b,r.ganancia);if(!q)return'';return`<div class="card"><h2>Equipo</h2>
-    ${q.sueldos.map(x=>`<div class="kv"><span>Sueldo · ${esc(x.w.nombre)}${q.meses>1?` (${q.meses} meses)`:''}</span><span class="neg">−${$$(x.monto)}</span></div>`).join('')}
+    ${q.sueldos.map(x=>`<div class="kv"><span>Sueldo · ${esc(x.w.nombre)}${x.parcial?` <small class="muted">(${x.dias} días activo)</small>`:''}</span><span class="neg">−${$$(x.monto)}</span></div>`).join('')}
     ${q.sueldos.length?`<div class="kv"><span><b>Ganancia después de sueldos</b></span><span class="${q.neta>=0?'pos':'neg'}"><b>${$$(q.neta)}</b></span></div>`:''}
-    ${q.socios.length?`<div class="small muted" style="font-weight:650;margin:10px 0 2px">Reparto entre socios</div>${q.socios.map(x=>`<div class="kv"><span>${esc(x.w.nombre)} (${nf(x.w.valor)}%)</span><span>${$$(x.monto)}</span></div>`).join('')}<div class="kv"><span>Queda para el negocio</span><span>${$$(q.neta-q.socios.reduce((s2,x)=>s2+x.monto,0))}</span></div>`:''}
+    ${q.socios.length?`<div class="small muted" style="font-weight:650;margin:10px 0 2px">Reparto entre socios</div>${q.socios.map(x=>`<div class="kv"><span>${esc(x.w.nombre)} (${nf(x.w.valor)}%${x.parcial?` · ${x.dias} días activo`:''})</span><span>${$$(x.monto)}</span></div>`).join('')}<div class="kv"><span>Queda para el negocio</span><span>${$$(q.neta-q.socios.reduce((s2,x)=>s2+x.monto,0))}</span></div>`:''}
     <div class="kv"><span>Pagos hechos al equipo</span><span>${$$(q.totPagos)}</span></div>
     <p class="small muted" style="margin:10px 0 0">El pago por hora o por pieza ya está incluido en el costo de cada venta. Los sueldos mensuales se descuentan aquí.</p></div>`})()}
   ${graficos(i.sec,r,a,b)}
@@ -988,7 +1008,7 @@ function vAjustes(){
     <button class="btn pri" id="aSave">Guardar</button>
   </div>
   <div class="card"><h2>Equipo (trabajadores y socios)</h2>
-    ${(S.equipo||[]).length?`<div class="list" style="margin:0 0 10px;box-shadow:none;border:1px solid var(--line)">${S.equipo.map(w=>`<div class="row" data-eq="${w.id}"><div class="dot in">${esc((w.nombre||'?').charAt(0).toUpperCase())}</div><div class="main"><div class="t">${esc(w.nombre)}</div><div class="s">${esc(w.cargo||'Sin cargo')} · ${PAGO[w.pago]}</div></div><div class="r">${w.pago==='socio'?nf(w.valor)+'%':$$(w.valor)+(w.pago==='hora'?'/h':w.pago==='pieza'?'/pza':'/mes')}</div></div>`).join('')}</div>`:'<p class="small muted" style="margin:0 0 10px">Agrega a quienes trabajan contigo: costureras, ayudantes, socias. Su pago se suma al costo de cada producto y en Informes ves los sueldos y el reparto entre socios.</p>'}
+    ${(S.equipo||[]).length?`<div class="list" style="margin:0 0 10px;box-shadow:none;border:1px solid var(--line)">${[...S.equipo].sort((a,b)=>activo(b)-activo(a)).map(w=>`<div class="row ${activo(w)?'':'inact'}" data-eq="${w.id}"><div class="dot in">${esc((w.nombre||'?').charAt(0).toUpperCase())}</div><div class="main"><div class="t">${esc(w.nombre)} ${activo(w)?'<span class="badge ok">En curso</span>':'<span class="badge">Inactivo</span>'}</div><div class="s">${esc(w.cargo||'Sin cargo')} · ${PAGO[w.pago]}</div></div><div class="r">${w.pago==='socio'?nf(w.valor)+'%':$$(w.valor)+(w.pago==='hora'?'/h':w.pago==='pieza'?'/pza':'/mes')}</div></div>`).join('')}</div>`:'<p class="small muted" style="margin:0 0 10px">Agrega a quienes trabajan contigo: costureras, ayudantes, socias. Su pago se suma al costo de cada producto y en Informes ves los sueldos y el reparto entre socios.</p>'}
     <button class="btn sec" id="aEq">${ICON.plus} Agregar trabajador o socio</button>
   </div>
   <div class="card"><h2>Costos e IVA</h2>
