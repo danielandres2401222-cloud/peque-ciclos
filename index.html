@@ -119,6 +119,8 @@ nav.tabs button.on{color:var(--rosa)}
 .envio summary{font-weight:650;cursor:pointer;color:var(--rosa-ink);padding:2px 0;list-style:none}.envio summary::-webkit-details-marker{display:none}
 .envio summary::after{content:'▾';float:right;color:var(--muted)}.envio[open] summary{margin-bottom:10px}.envio[open] summary::after{content:'▴'}
 @keyframes rell{0%{background:var(--azul-2)}100%{background:var(--field)}}input.rell{animation:rell 1.6s ease}
+.exbox{border:1px dashed var(--line);border-radius:14px;padding:10px 12px 2px;margin:0 0 12px}.exh{font-weight:650;color:var(--rosa-ink);margin:0 0 8px;font-size:14px}
+.sug{color:var(--rosa-ink);font-weight:700}
 .areabox{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end}
 .areabox .x2{padding-bottom:12px;font-weight:700;color:var(--muted)}
 .uline select,.uline input{color:var(--ink);border:1px solid var(--line);background:var(--field);border-radius:10px;padding:10px;font-size:16px;width:100%;-webkit-appearance:none}
@@ -706,15 +708,36 @@ function nombreMov(m){
   if(m.tipo==='ingreso'){const x=mat(m.itemId);return x?x.nombre:'(material eliminado)'}
   return m.desc||'Confección';
 }
+/* ===== Costos completos: mano de obra, personal, otros e IVA ===== */
+const CFG=()=>Object.assign({valorHora:0,margen:60,iva:false,ivaPct:19},S.config);
+const exCosto=ex=>{ex=ex||{};const c=CFG();return (num(ex.horas)||0)*(c.valorHora||0)+(num(ex.personal)||0)+(num(ex.otros)||0)};
+const ivaDe=total=>{const c=CFG();return c.iva?Math.round(total*c.ivaPct/(100+c.ivaPct)):0};
+const sugerido=costo=>{const c=CFG();let v=costo*(1+(c.margen||0)/100);if(c.iva)v*=1+c.ivaPct/100;return Math.ceil(v/100)*100};
+/* Campos de costos extra para un producto o modelo */
+function camposEx(ex){ex=ex||{};const c=CFG();return`<div class="exbox"><div class="exh">Otros costos por unidad</div>
+  <div class="f2"><div class="f"><label>Horas de trabajo</label><input id="xh" inputmode="decimal" value="${ex.horas??''}" placeholder="Ej: 1,5"></div><div class="f"><label>Pago a personal</label><input id="xpe" inputmode="numeric" value="${ex.personal??''}" placeholder="$ ayudante"></div></div>
+  <div class="f"><label>Otros (empaque, etiquetas, hilo…)</label><input id="xot" inputmode="numeric" value="${ex.otros??''}" placeholder="$"></div>
+  ${c.valorHora?'':`<div class="hint" style="margin:-4px 0 6px">Para sumar la mano de obra, pon el <b>valor de tu hora</b> en Ajustes → Costos e IVA.</div>`}</div>`}
+const leerEx=()=>({horas:num($('#xh').value)||0,personal:num($('#xpe').value)||0,otros:num($('#xot').value)||0});
+/* Desglose: base = costo de compra o de materiales */
+function desglose(base,ex,precio,baseLbl){const c=CFG();ex=ex||{};const mo=(num(ex.horas)||0)*(c.valorHora||0),pe=num(ex.personal)||0,ot=num(ex.otros)||0;
+  const costo=base+mo+pe+ot,iva=c.iva?precio*c.ivaPct/(100+c.ivaPct):0,gan=precio-iva-costo,mg=precio?gan/(precio-iva||1)*100:0;
+  return`<div class="kv"><span>${baseLbl}</span><span>${$$(base)}</span></div>
+  ${mo?`<div class="kv"><span>Mano de obra (${nf(num(ex.horas))} h × ${$$(c.valorHora)})</span><span>${$$(mo)}</span></div>`:''}
+  ${pe?`<div class="kv"><span>Personal</span><span>${$$(pe)}</span></div>`:''}${ot?`<div class="kv"><span>Otros</span><span>${$$(ot)}</span></div>`:''}
+  <div class="kv"><span><b>Costo total</b></span><span><b>${$$(costo)}</b></span></div>
+  ${precio?`<div class="kv"><span>Precio de venta</span><span>${$$(precio)}</span></div>${c.iva?`<div class="kv"><span>IVA ${c.ivaPct}% incluido</span><span class="neg">−${$$(iva)}</span></div>`:''}
+  <div class="kv"><span><b>Ganancia real</b></span><span class="${gan>=0?'pos':'neg'}"><b>${$$(gan)}</b>${precio-iva>0?` <small class="muted">(${Math.round(mg)}%)</small>`:''}</span></div>`:''}
+  ${costo?`<div class="kv"><span>Precio sugerido (${c.margen||0}% ganancia${c.iva?' + IVA':''})</span><span><a href="#" class="sug" data-sug="${sugerido(costo)}">${$$(sugerido(costo))}</a></span></div>`:''}`}
 function resumen(desde,hasta,sec){
-  const r={ventas:0,compras:0,costo:0,n:0,movs:[]};
+  const r={ventas:0,compras:0,costo:0,iva:0,n:0,movs:[]};
   for(const m of S.movs){
     if(sec&&sec!=='todo'&&m.sec!==sec)continue;
     if(desde&&m.fecha<desde)continue; if(hasta&&m.fecha>hasta)continue;
     r.movs.push(m);
-    if(m.tipo==='salida'){r.ventas+=m.total;r.costo+=m.costo||0;r.n++}else r.compras+=m.total;
+    if(m.tipo==='salida'){r.ventas+=m.total;r.costo+=m.costo||0;r.iva+=m.iva||0;r.n++}else r.compras+=m.total;
   }
-  r.balance=r.ventas-r.compras; r.ganancia=r.ventas-r.costo;
+  r.balance=r.ventas-r.compras; r.ganancia=r.ventas-r.iva-r.costo;
   r.movs.sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.creado||0)-(a.creado||0));
   return r;
 }
@@ -764,7 +787,7 @@ function vInicio(){
   $('#view').innerHTML=`
   ${!standalone&&/iPhone|iPad/.test(navigator.userAgent)?`<div class="install"><b>Instálala en tu iPhone:</b> toca <b>Compartir</b> y luego <b>"Agregar a pantalla de inicio"</b>.</div>`:''}
   <div class="grid2" style="margin-top:8px">
-    <div class="kpi big"><div class="l">Ganancia del mes (ventas − costo de lo vendido)</div><div class="v ${r.ganancia>=0?'pos':'neg'}">${cnt$(r.ganancia)}</div></div>
+    <div class="kpi big"><div class="l">Ganancia del mes (ventas − costos${CFG().iva?' − IVA':''})</div><div class="v ${r.ganancia>=0?'pos':'neg'}">${cnt$(r.ganancia)}</div></div>
     <div class="kpi"><div class="l">Vendido</div><div class="v">${cnt$(r.ventas)}</div></div>
     <div class="kpi"><div class="l">Compras</div><div class="v">${cnt$(r.compras)}</div></div>
   </div>
@@ -857,7 +880,7 @@ function vInformes(){
     <div class="kv"><span>Ventas (dinero que entró)</span><span class="pos">${$$(r.ventas)}</span></div>
     <div class="kv"><span>Compras (dinero que salió)</span><span class="neg">${$$(r.compras)}</span></div>
     <div class="kv"><span><b>Balance de caja</b></span><span class="${r.balance>=0?'pos':'neg'}"><b>${$$(r.balance)}</b></span></div>
-    <div class="kv"><span>Costo de lo vendido</span><span>${$$(r.costo)}</span></div>
+    <div class="kv"><span>Costo de lo vendido</span><span>${$$(r.costo)}</span></div>${r.iva?`<div class="kv"><span>IVA de las ventas</span><span>${$$(r.iva)}</span></div>`:''}
     <div class="kv"><span><b>Ganancia de las ventas</b></span><span class="${r.ganancia>=0?'pos':'neg'}"><b>${$$(r.ganancia)}</b></span></div>
     <div class="kv"><span>N° de ventas</span><span>${r.n}</span></div>
     <p class="small muted" style="margin:10px 0 0">El <b>balance de caja</b> compara lo que entró con lo que salió en el período. La <b>ganancia de las ventas</b> resta a cada venta lo que costó ese producto o los materiales de esa confección.</p>
@@ -895,6 +918,13 @@ function vAjustes(){
     <div class="f"><label>Avisar cuando el stock sea igual o menor a</label><input id="aMin" inputmode="numeric" value="${S.config.stockMin}"></div>
     <button class="btn pri" id="aSave">Guardar</button>
   </div>
+  <div class="card"><h2>Costos e IVA</h2>
+    <div class="f"><label>Valor de tu hora de trabajo</label><input id="aHora" inputmode="numeric" value="${CFG().valorHora||''}" placeholder="Ej: 4000"></div>
+    <div class="f"><label>Ganancia que quieres sobre el costo (%)</label><input id="aMarg" inputmode="numeric" value="${CFG().margen}"></div>
+    <div class="f"><label>¿Tus precios incluyen IVA?</label><div class="seg" style="margin:0"><button data-iva="0" class="${CFG().iva?'':'on'}">No cobro IVA</button><button data-iva="1" class="${CFG().iva?'on':''}">Sí, IVA 19%</button></div></div>
+    <p class="small muted" style="margin:0 0 12px">Con IVA, la app separa el 19% de cada venta y lo descuenta de la ganancia, porque ese dinero es para el SII.</p>
+    <button class="btn pri" id="aCost">Guardar costos</button>
+  </div>
   <div class="card"><h2>Respaldo</h2>
     <p class="small muted" style="margin:0 0 12px">Tus datos se guardan <b>solo en este teléfono</b>. Haz un respaldo de vez en cuando (por ejemplo, guárdalo en Archivos o iCloud Drive) por si borras la app o cambias de iPhone.</p>
     <button class="btn sec" id="aExp" style="margin-bottom:10px">${ICON.dl} Descargar respaldo</button>
@@ -915,6 +945,8 @@ function vAjustes(){
   document.querySelectorAll('.fxgrid [data-fx]').forEach(b=>b.onclick=async()=>{if(b.dataset.fx==='imagen'&&!(await idbGetK('fondo_img'))){$('#fondoIn').click();return}aplicarFondo(b.dataset.fx);return;document.querySelectorAll('.fxgrid [data-fx]').forEach(y=>y.classList.toggle('on',y===b))});
   document.querySelectorAll('[data-fps]').forEach(b=>b.onclick=()=>{try{localStorage.setItem('pc_'+'fps',b.dataset.fps)}catch(_){}document.querySelectorAll('[data-fps]').forEach(y=>y.classList.toggle('on',y===b))});
   document.querySelectorAll('[data-fc]').forEach(b=>b.onclick=()=>{BG.cant(b.dataset.fc);document.querySelectorAll('[data-fc]').forEach(y=>y.classList.toggle('on',y===b))});
+  document.querySelectorAll('[data-iva]').forEach(b=>b.onclick=()=>document.querySelectorAll('[data-iva]').forEach(y=>y.classList.toggle('on',y===b)));
+  $('#aCost').onclick=async()=>{S.config.valorHora=Math.max(0,num($('#aHora').value));S.config.margen=Math.max(0,num($('#aMarg').value));S.config.iva=!!document.querySelector('[data-iva="1"].on');S.config.ivaPct=19;await guardar();toast('Costos guardados')};
   $('#aSave').onclick=async()=>{S.config.negocio=$('#aNeg').value.trim()||'Pequeciclos';S.config.stockMin=Math.max(0,num($('#aMin').value));await guardar();toast('Guardado')};
   $('#aExp').onclick=()=>{const blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});entregar(blob,'respaldo-'+slug(S.config.negocio)+'-'+hoy()+'.json')};
   $('#aImp').onclick=()=>$('#fileIn').click();
@@ -1001,7 +1033,7 @@ function formRopa(tipo,preId,pre){
       if(pid==='__n'){const n=$('#fn').value.trim();if(!n)return toast('Escribe el nombre del producto');const p={id:uid(),nombre:n,detalle:$('#fd').value.trim(),precio:num($('#fpv').value)};S.productos.push(p);pid=p.id}
       if(cant<=0)return toast('La cantidad debe ser mayor a 0');
       const m={id:uid(),sec:'ropa',tipo,fecha:$('#ff').value||hoy(),itemId:pid,cant,unit,total:Math.round(cant*unit),nota:$('#fno').value.trim(),creado:Date.now()};
-      if(!ing)m.costo=Math.round(costoProd(pid)*cant);
+      if(!ing){m.costo=Math.round((costoProd(pid)+exCosto((prod(pid)||{}).ex))*cant);m.iva=ivaDe(m.total)}
       S.movs.push(m);await guardar();cerrar();render();toast(ing?'Ingreso guardado':'Venta guardada');
     };
   });
@@ -1013,11 +1045,15 @@ function formProducto(id){
   <div class="btnrow"><button class="btn in" id="pIn">${ICON.in} Ingreso</button><button class="btn out" id="pOut">${ICON.out} Venta</button></div>`:''}
   <div class="f"><label>Nombre</label><input id="pn" value="${esc(p.nombre)}"></div>
   <div class="f2"><div class="f"><label>Detalle (talla / color)</label><input id="pd" value="${esc(p.detalle)}"></div><div class="f"><label>Precio de venta</label><input id="pp" inputmode="numeric" value="${p.precio||''}"></div></div>
+  ${camposEx(p.ex)}
+  <div class="box" id="pdes"></div>
   <button class="btn pri" id="pok" style="margin-bottom:10px">Guardar</button>
   ${id?`<button class="btn dan" id="pdel">Eliminar producto</button>`:''}`,()=>{
     if(id){$('#pIn').onclick=()=>formRopa('ingreso',id);$('#pOut').onclick=()=>formRopa('salida',id)}
+    const des=()=>{$('#pdes').innerHTML=desglose(id?costoProd(id):0,leerEx(),num($('#pp').value),'Costo de compra / fabricación');const a=document.querySelector('#pdes .sug');if(a)a.onclick=e=>{e.preventDefault();$('#pp').value=a.dataset.sug;des()}};
+    ['pp','xh','xpe','xot'].forEach(k=>$('#'+k).oninput=des);des();
     $('#pok').onclick=async()=>{const n=$('#pn').value.trim();if(!n)return toast('Escribe el nombre');
-      if(id){p.nombre=n;p.detalle=$('#pd').value.trim();p.precio=num($('#pp').value)}else S.productos.push({id:uid(),nombre:n,detalle:$('#pd').value.trim(),precio:num($('#pp').value)});
+      if(id){p.nombre=n;p.detalle=$('#pd').value.trim();p.precio=num($('#pp').value);p.ex=leerEx()}else S.productos.push({id:uid(),nombre:n,detalle:$('#pd').value.trim(),precio:num($('#pp').value),ex:leerEx()});
       await guardar();cerrar();render();toast('Guardado')};
     const d=$('#pdel');if(d)d.onclick=()=>{if(usado)return toast('Tiene movimientos: elimínalos primero');confirmar('¿Eliminar producto?',p.nombre,'Eliminar',async()=>{S.productos=S.productos.filter(x=>x.id!==id);await guardar();render()})};
   });
@@ -1291,28 +1327,32 @@ function formRamo(pre){
   <div class="box">
     <div class="kv"><span>Venta total</span><span id="rvt">$0</span></div>
     <div class="kv"><span>Costo de materiales</span><span id="rct">$0</span></div>
+    <div class="kv"><span>Mano de obra, personal y otros</span><span id="rxt">$0</span></div>
+    <div class="kv" id="rivk" hidden><span>IVA incluido</span><span id="rivt" class="neg">$0</span></div>
     <div class="kv"><span><b>Ganancia</b></span><span id="rgt"><b>$0</b></span></div>
   </div>
   <button class="btn pri" id="rok">Guardar venta</button>`,()=>{
+    let recEx={};
     const linea=u=>lineaMat($('#rl'),ms,u,()=>sync());
     const leer=()=>leerLineas('#rl');
     const sync=()=>{const n=Math.max(num($('#rc').value),0),pv=num($('#rp').value)*n;let c=0;const falta=[];
       for(const u of leer()){c+=costoMat(u.matId)*u.cant*n;if(u.cant*n>stockMat(u.matId))falta.push((mat(u.matId)||{}).nombre)}
-      $('#rvt').textContent=$$(pv);$('#rct').textContent=$$(c);const g=pv-c;$('#rgt').innerHTML=`<b class="${g>=0?'pos':'neg'}">${$$(g)}</b>`;
+      const xr=exCosto(recEx)*n,iv=ivaDe(pv);$('#rxt').textContent=$$(xr);$('#rivk').hidden=!CFG().iva;$('#rivt').textContent='−'+$$(iv);
+      $('#rvt').textContent=$$(pv);$('#rct').textContent=$$(c);const g=pv-c-xr-iv;$('#rgt').innerHTML=`<b class="${g>=0?'pos':'neg'}">${$$(g)}</b>`;
       $('#rw').innerHTML=falta.length?`<div class="warn">No alcanza el stock de: ${esc(falta.join(', '))}. Puedes guardar igual.</div>`:''};
     const ra=$('#radd');if(ra)ra.onclick=()=>{linea({matId:ms[0].id});sync()};
     if(ms.length)linea({matId:ms[0].id});
     $('#rd').onchange=()=>{const prev=[...S.movs].reverse().find(m=>m.sec==='ramos'&&m.tipo==='salida'&&m.desc===$('#rd').value.trim());if(prev){$('#rl').innerHTML='';(prev.usados||[]).forEach(u=>{if(mat(u.matId))linea({matId:u.matId,cant:u.cantRamo??u.cant/(prev.cant||1),ancho:u.ancho,largo:u.largo})});if(!$('#rp').value)$('#rp').value=prev.unit||'';sync()}};
     $('#rc').oninput=sync;$('#rp').oninput=sync;sync();
-    const rr=$('#rrec');if(rr)rr.onchange=()=>{const r=receta(rr.value);if(!r)return;$('#rd').value=r.nombre;$('#rp').value=r.precio||'';$('#rl').innerHTML='';r.mats.forEach(u=>{if(mat(u.matId))linea(u)});sync()};
+    const rr=$('#rrec');if(rr)rr.onchange=()=>{const r=receta(rr.value);if(!r){recEx={};sync();return}recEx=r.ex||{};$('#rd').value=r.nombre;$('#rp').value=r.precio||'';$('#rl').innerHTML='';r.mats.forEach(u=>{if(mat(u.matId))linea(u)});sync()};
     if(pre&&pre.recetaId&&rr){rr.value=pre.recetaId;rr.onchange()}
     if(pre){$('#rd').value=pre.desc||'';$('#rd').onchange();if(pre.unit)$('#rp').value=pre.unit;if(pre.nota)$('#rno').value=pre.nota;sync()}
     $('#rok').onclick=async()=>{
       const desc=$('#rd').value.trim()||'Confección';const n=num($('#rc').value),unit=num($('#rp').value);
       if(n<=0)return toast('La cantidad debe ser mayor a 0');
       const usados=leer().map(u=>({matId:u.matId,cantRamo:u.cant,cant:u.cant*n,costo:Math.round(costoMat(u.matId)*u.cant*n),...(u.ancho?{ancho:u.ancho,largo:u.largo}:{})}));
-      const costo=usados.reduce((s,u)=>s+u.costo,0);
-      S.movs.push({id:uid(),sec:'ramos',tipo:'salida',fecha:$('#rf').value||hoy(),itemId:null,desc,cant:n,unit,total:Math.round(n*unit),costo,usados,nota:$('#rno').value.trim(),creado:Date.now()});
+      const costo=usados.reduce((s,u)=>s+u.costo,0)+Math.round(exCosto(recEx)*n);
+      S.movs.push({id:uid(),sec:'ramos',tipo:'salida',fecha:$('#rf').value||hoy(),itemId:null,desc,cant:n,unit,total:Math.round(n*unit),costo,iva:ivaDe(Math.round(n*unit)),usados,nota:$('#rno').value.trim(),creado:Date.now()});
       await guardar();cerrar();render();toast('Venta guardada');
     };
   });
@@ -1329,7 +1369,7 @@ function detalleMov(id){
     <div class="kv"><span>Cantidad</span><span>${m.ancho?`${nfm(m.ancho)} × ${nfm(m.largo)} m${m.piezas>1?' × '+m.piezas:''} = `:''}${nfm(m.cant)} ${esc(u)}</span></div>
     <div class="kv"><span>${ing?'Costo unitario':'Precio unitario'}</span><span>${$$(m.unit)}</span></div>
     <div class="kv"><span>Total</span><span class="${ing?'neg':'pos'}">${$$(m.total)}</span></div>
-    ${!ing?`<div class="kv"><span>Costo</span><span>${$$(m.costo)}</span></div><div class="kv"><span>Ganancia</span><span class="${m.total-m.costo>=0?'pos':'neg'}">${$$(m.total-(m.costo||0))}</span></div>`:''}
+    ${!ing?`<div class="kv"><span>Costo total</span><span>${$$(m.costo)}</span></div>${m.iva?`<div class="kv"><span>IVA</span><span>${$$(m.iva)}</span></div>`:''}<div class="kv"><span>Ganancia</span><span class="${m.total-(m.iva||0)-m.costo>=0?'pos':'neg'}">${$$(m.total-(m.iva||0)-(m.costo||0))}</span></div>`:''}
     ${m.nota?`<div class="kv"><span>Nota</span><span>${esc(m.nota)}</span></div>`:''}
   </div>
   ${m.usados&&m.usados.length?`<div class="box"><div class="small muted" style="font-weight:650;margin-bottom:4px">Materiales usados</div>${m.usados.map(x=>`<div class="kv"><span>${esc((mat(x.matId)||{}).nombre||'(eliminado)')}</span><span>${x.ancho?`${nfm(x.ancho)}×${nfm(x.largo)} m · `:''}${nfm(x.cant)} ${esc((mat(x.matId)||{}).unidad||'')} · ${$$(x.costo)}</span></div>`).join('')}</div>`:''}
@@ -1432,16 +1472,18 @@ function formReceta(id){
   <div class="f"><label>Precio de venta</label><input id="ep" inputmode="numeric" value="${r.precio||''}" placeholder="$"></div>
   <div class="f"><label>Materiales de <b>una</b> unidad</label><div id="el"></div>
     ${ms.length?`<button class="btn ghost" id="eadd">${ICON.plus} Agregar material</button>`:`<div class="hint">Primero registra materiales en la pestaña Materiales.</div>`}</div>
-  <div class="box"><div class="kv"><span>Costo de materiales</span><span id="eco">$0</span></div><div class="kv"><span><b>Ganancia por unidad</b></span><span id="ega"><b>$0</b></span></div></div>
+  ${camposEx(r.ex)}
+  <div class="box" id="edes"></div>
   <button class="btn pri" id="eok" style="margin-bottom:10px">Guardar modelo</button>
   ${id?`<button class="btn dan" id="edel">Eliminar modelo</button>`:''}`,()=>{
     const linea=u=>lineaMat($('#el'),ms,u,()=>sy());
     const leer=()=>leerLineas('#el');
-    const sy=()=>{const c=leer().reduce((s,u)=>s+costoMat(u.matId)*u.cant,0),g=num($('#ep').value)-c;$('#eco').textContent=$$(c);$('#ega').innerHTML=`<b class="${g>=0?'pos':'neg'}">${$$(g)}</b>`};
+    const sy=()=>{const c=leer().reduce((s,u)=>s+costoMat(u.matId)*u.cant,0);$('#edes').innerHTML=desglose(c,leerEx(),num($('#ep').value),'Materiales');const a=document.querySelector('#edes .sug');if(a)a.onclick=e=>{e.preventDefault();$('#ep').value=a.dataset.sug;sy()}};
+    ['xh','xpe','xot'].forEach(k=>$('#'+k).oninput=sy);
     (r.mats||[]).forEach(u=>{if(mat(u.matId))linea(u)});if(!r.mats.length&&ms.length)linea({matId:ms[0].id});
     const ad=$('#eadd');if(ad)ad.onclick=()=>{linea({matId:ms[0].id});sy()};$('#ep').oninput=sy;sy();
     $('#eok').onclick=async()=>{const n=$('#ec').value.trim();if(!n)return toast('Escribe el nombre del modelo');
-      const d={nombre:n,precio:num($('#ep').value),mats:leer()};if(!S.recetas)S.recetas=[];
+      const d={nombre:n,precio:num($('#ep').value),mats:leer(),ex:leerEx()};if(!S.recetas)S.recetas=[];
       if(id)Object.assign(r,d);else S.recetas.push(Object.assign({id:uid()},d));await guardar();cerrar();render(false);toast('Modelo guardado')};
     const de=$('#edel');if(de)de.onclick=()=>confirmar('¿Eliminar modelo?',r.nombre,'Eliminar',async()=>{S.recetas=S.recetas.filter(x=>x.id!==id);await guardar();render(false)});
   });
@@ -1449,9 +1491,9 @@ function formReceta(id){
 /* Registra la venta de un pedido vinculado (descuenta stock definitivamente) */
 async function ventaDePedido(p){
   const n=p.cant||1,unit=n?(p.total||0)/n:0;let m;
-  if(p.sec==='ropa'&&p.prodId&&prod(p.prodId)){m={id:uid(),sec:'ropa',tipo:'salida',fecha:hoy(),itemId:p.prodId,cant:n,unit,total:Math.round(p.total||0),costo:Math.round(costoProd(p.prodId)*n),nota:p.cliente,creado:Date.now()}}
+  if(p.sec==='ropa'&&p.prodId&&prod(p.prodId)){m={id:uid(),sec:'ropa',tipo:'salida',fecha:hoy(),itemId:p.prodId,cant:n,unit,total:Math.round(p.total||0),costo:Math.round((costoProd(p.prodId)+exCosto(prod(p.prodId).ex))*n),iva:ivaDe(Math.round(p.total||0)),nota:p.cliente,creado:Date.now()}}
   else if(p.sec==='ramos'&&p.recetaId&&receta(p.recetaId)){const r=receta(p.recetaId);const usados=r.mats.filter(u=>mat(u.matId)).map(u=>({matId:u.matId,cantRamo:u.cant,cant:u.cant*n,costo:Math.round(costoMat(u.matId)*u.cant*n)}));
-    m={id:uid(),sec:'ramos',tipo:'salida',fecha:hoy(),itemId:null,desc:r.nombre,cant:n,unit,total:Math.round(p.total||0),costo:usados.reduce((s,u)=>s+u.costo,0),usados,nota:p.cliente,creado:Date.now()}}
+    m={id:uid(),sec:'ramos',tipo:'salida',fecha:hoy(),itemId:null,desc:r.nombre,cant:n,unit,total:Math.round(p.total||0),costo:usados.reduce((s,u)=>s+u.costo,0)+Math.round(exCosto(r.ex)*n),iva:ivaDe(Math.round(p.total||0)),usados,nota:p.cliente,creado:Date.now()}}
   if(!m)return false;S.movs.push(m);p.movId=m.id;await guardar();return true;
 }
 
@@ -1964,7 +2006,7 @@ function informePDF(a,b,nom,sec){
   doc.text('Informe '+({todo:'general',ropa:'de Productos',ramos:'del Taller'})[sec]+' · '+nom,14,25);
   doc.setFontSize(9);doc.text('Generado el '+fFecha(hoy()),W-14,18,{align:'right'});
   const tbl={theme:'grid',styles:{font:'helvetica',fontSize:9,cellPadding:2.2,lineColor:[251,214,228],lineWidth:.2,textColor:[43,34,38]},headStyles:{fillColor:rosa,textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[255,240,246]},margin:{left:14,right:14}};
-  const resumenRows=[['Ventas (dinero que entró)',$$(r.ventas)],['Compras (dinero que salió)',$$(r.compras)],['Balance de caja',$$(r.balance)],['Costo de lo vendido',$$(r.costo)],['Ganancia de las ventas',$$(r.ganancia)],['N° de ventas',String(r.n)]];
+  const resumenRows=[['Ventas (dinero que entró)',$$(r.ventas)],['Compras (dinero que salió)',$$(r.compras)],['Balance de caja',$$(r.balance)],['Costo de lo vendido',$$(r.costo)],...(r.iva?[['IVA de las ventas',$$(r.iva)]]:[]),['Ganancia de las ventas',$$(r.ganancia)],['N° de ventas',String(r.n)]];
   doc.autoTable({...tbl,startY:31,head:[['Resumen','Monto']],body:resumenRows,columnStyles:{1:{halign:'right',fontStyle:'bold'}},tableWidth:110});
   if(porSec.length>1){doc.autoTable({...tbl,startY:doc.lastAutoTable.finalY+6,head:[['Sección','Ventas','Compras','Balance','Ganancia ventas']],body:porSec.map(({s,r})=>[s==='ropa'?'Productos':'Taller',$$(r.ventas),$$(r.compras),$$(r.balance),$$(r.ganancia)]),columnStyles:{1:{halign:'right'},2:{halign:'right'},3:{halign:'right'},4:{halign:'right'}}})}
   if(top.length){doc.autoTable({...tbl,startY:doc.lastAutoTable.finalY+6,head:[['Lo más vendido','Sección','Cant.','Ventas','Ganancia']],body:top.slice(0,15).map(g=>[g.n,g.sec,nf(g.c),$$(g.v),$$(g.v-g.co)]),columnStyles:{2:{halign:'right'},3:{halign:'right'},4:{halign:'right'}}})}
@@ -1982,7 +2024,7 @@ function informeCSV(a,b,nom,sec){
   const c=v=>{if(v==null)return'';if(typeof v==='number')return String(Math.round(v));const s=String(v);return/[;"\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
   const L=[];
   L.push([S.config.negocio],['Informe '+({todo:'general',ropa:'de Productos',ramos:'del Taller'})[sec],nom],[]);
-  L.push(['Ventas',r.ventas],['Compras',r.compras],['Balance de caja',r.balance],['Costo de lo vendido',r.costo],['Ganancia de las ventas',r.ganancia],['N° de ventas',r.n],[]);
+  L.push(['Ventas',r.ventas],['Compras',r.compras],['Balance de caja',r.balance],['Costo de lo vendido',r.costo],['IVA de las ventas',r.iva],['Ganancia de las ventas',r.ganancia],['N° de ventas',r.n],[]);
   L.push(['Fecha','Sección','Tipo','Detalle','Cantidad','Valor unitario','Total','Costo','Ganancia','Nota']);
   det.forEach(d=>L.push([d.fecha,d.sec,d.tipo,d.det,d.cant,d.unit,d.total,d.costo,d.gan,d.nota]));
   const txt='﻿'+L.map(row=>row.map(c).join(';')).join('\r\n');
