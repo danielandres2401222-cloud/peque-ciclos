@@ -27,7 +27,11 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 -apple-sy
 body{min-height:100vh;padding-bottom:calc(76px + var(--bot))}
 button,input,select,textarea{font:inherit;color:inherit}
 header.top{position:sticky;top:0;z-index:5;background:var(--hdr);backdrop-filter:saturate(1.4) blur(12px);-webkit-backdrop-filter:saturate(1.4) blur(12px);padding:calc(10px + var(--top)) 18px 10px;border-bottom:1px solid transparent}
-#hlogo{position:absolute;right:60px;top:calc(6px + var(--top));height:50px;width:auto}
+#hlogo{display:none}
+header.top.conlogo{text-align:center;padding-bottom:6px}
+header.top.conlogo #hlogo{display:block;margin:2px auto 0;width:min(78vw,340px);height:auto;filter:drop-shadow(0 2px 6px rgba(120,90,60,.12))}
+header.top.conlogo h1{display:none}
+header.top.conlogo .sub{margin-top:2px}
 header.top .sub{font-size:13px;color:var(--muted);font-weight:500;letter-spacing:.02em}
 header.top h1{margin:0;color:var(--rosa-ink);font-size:28px;letter-spacing:-.02em;font-weight:750}
 main{padding:6px 16px 24px;max-width:640px;margin:0 auto}
@@ -196,7 +200,7 @@ html[data-fx]:not([data-fx=none]) .kpi.big{box-shadow:0 10px 30px rgba(143,106,6
 </style>
 </head>
 <body>
-<header class="top"><div class="sub" id="hsub"></div><h1 id="htitle">Inicio</h1><img id="hlogo" src="logo.png" alt=""><button class="thb" id="thBtn" aria-label="Claro / Nocturno"></button></header>
+<header class="top"><img id="hlogo" src="logo.png" alt="Pequeciclos"><div class="sub" id="hsub"></div><h1 id="htitle">Inicio</h1><button class="thb" id="thBtn" aria-label="Claro / Nocturno"></button></header>
 <div id="bgfx" aria-hidden="true"></div>
 <div id="bgimg" aria-hidden="true"></div>
 <canvas id="bgpart" aria-hidden="true"></canvas>
@@ -710,7 +714,7 @@ function rangoMes(off=0){const d=new Date();const a=new Date(d.getFullYear(),d.g
 let vista='inicio'; const ui={ropaTab:'stock',ramosTab:'stock',q:'',inf:{per:'mes',sec:'todo',desde:'',hasta:''}};
 const TABS=['inicio','ropa','ramos','pedidos','catalogo','informes','ajustes'];
 document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{const d=TABS.indexOf(b.dataset.v)-TABS.indexOf(vista);if(!d)return;$('#view').style.setProperty('--dx',(d>0?18:-18)+'px');vista=b.dataset.v;render();window.scrollTo(0,0)});
-function setHead(t,s){$('#htitle').textContent=t;$('#hsub').textContent=s||'';const l=$('#hlogo');if(l)l.style.display=vista==='inicio'?'':'none'}
+function setHead(t,s){$('#htitle').textContent=t;$('#hsub').textContent=s||'';document.querySelector('header.top').classList.toggle('conlogo',vista==='inicio')}
 function render(anim){
   syncTema();
   document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===vista));
